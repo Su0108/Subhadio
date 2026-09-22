@@ -980,7 +980,15 @@
           <div class="field"><label>Mode</label>
             <select id="cf-mode"><option value="test">Test / Sandbox</option><option value="live">Live / Production</option></select>
           </div>
-          <div class="muted" style="font-size:11px;margin:8px 0 4px;line-height:1.5;">Optional — for instant confirmation, add this as a webhook in your Cashfree dashboard (Developers → Webhooks):</div>
+          <div class="card" style="background:var(--amber-50,#fffbeb);border-color:var(--amber-200,#fde68a);padding:10px 12px;font-size:11px;line-height:1.7;margin:8px 0 4px;">
+            <strong>Setup steps (do all 4 — required, not optional):</strong><br>
+            1. Cashfree Dashboard → <strong>Developers → API Keys</strong> → copy App ID &amp; Secret Key into the fields above. Use Test keys for Test mode, Production keys for Live mode.<br>
+            2. Cashfree Dashboard → <strong>Developers → Webhooks → Add Webhook</strong> → paste the URL shown below.<br>
+            3. Event to select: <strong>PAYMENT_SUCCESS_WEBHOOK</strong>.<br>
+            4. Test and Live mode each need this webhook added <strong>separately</strong> — they don't share settings.<br>
+            <span style="display:block;margin-top:6px;">Without the webhook, some payment methods (UPI apps, netbanking) can complete on Cashfree's side but never get confirmed on your invoice.</span>
+          </div>
+          <div class="field"><label>Webhook URL — paste this into Cashfree</label></div>
           <div class="card" style="background:var(--slate-50);padding:10px 12px;font-size:11px;word-break:break-all;" id="cf-webhook-url"></div>
         </div>
 
@@ -2805,6 +2813,19 @@ async function deleteInvoice(id){
 // ---------------- CASHFREE PAY (public invoice page) ----------------
 const CF_FUNCTIONS_BASE = 'https://sjrkoiypdhcrwzetijen.supabase.co/functions/v1';
 
+// Unlike PayU/Instamojo (whose -callback edge functions verify server-side
+// BEFORE redirecting the browser back), Cashfree's return_url goes straight
+// back to the app. For payment methods that can't stay inside the _modal
+// (UPI apps, netbanking), the Cashfree SDK does a full-page redirect to
+// this URL instead of resolving the checkout() promise — so the in-page
+// verify() call in payViaCashfree() below never runs. We put the
+// {order_id} wildcard BEFORE the '#' (as real query string, not hash) so
+// Cashfree can substitute it, and finishBoot() can read it on return to
+// run verification itself.
+function cashfreeReturnUrl(invId){
+  return appBaseUrl() + '?cf_order={order_id}#/invoice/' + encodeURIComponent(invId);
+}
+
 function payWithGateway(invId, btn){
   if(publicActiveGateway === 'razorpay') return payViaRazorpay(invId, btn);
   if(publicActiveGateway === 'payu') return payViaPayU(invId, btn);
@@ -2817,7 +2838,7 @@ async function payViaCashfree(invId, btn){
   try{
     const createRes = await fetch(CF_FUNCTIONS_BASE + '/cashfree-create-order', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ invoice_id: invId, return_url: invoiceShareLink(invId) })
+      body: JSON.stringify({ invoice_id: invId, return_url: cashfreeReturnUrl(invId) })
     });
     const order = await createRes.json();
     if(!createRes.ok || order.error){
@@ -3985,7 +4006,7 @@ async function finishBoot(){
 
   paintStaticChrome();
   const wait = Math.max(SPLASH_MIN_MS - (Date.now()-bootStart), 0);
-  setTimeout(()=>{
+  setTimeout(async ()=>{
     let target;
     if(sharedId && currentInvoiceId===sharedId){
       target = 'invoice-detail';
@@ -4010,7 +4031,13 @@ async function finishBoot(){
     // re-show it.
     const payuStatus = new URLSearchParams(location.search).get('payu');
     if(payuStatus){
-      if(payuStatus === 'success'){ showToast('Payment received — thank you!'); }
+      if(payuStatus === 'success'){
+        showToast('Payment received — thank you!');
+        if(currentInvoiceId){
+          await loadPublicInvoice(currentInvoiceId);
+          renderInvoiceDetail();
+        }
+      }
       else { showToast('Payment could not be completed'); }
       const cleanUrl = location.pathname + location.hash;
       history.replaceState(history.state, '', cleanUrl);
@@ -4022,8 +4049,41 @@ async function finishBoot(){
     // + URL cleanup as the PayU flow above.
     const instamojoStatus = new URLSearchParams(location.search).get('instamojo');
     if(instamojoStatus){
-      if(instamojoStatus === 'success'){ showToast('Payment received — thank you!'); }
+      if(instamojoStatus === 'success'){
+        showToast('Payment received — thank you!');
+        if(currentInvoiceId){
+          await loadPublicInvoice(currentInvoiceId);
+          renderInvoiceDetail();
+        }
+      }
       else { showToast('Payment could not be completed'); }
+      const cleanUrl = location.pathname + location.hash;
+      history.replaceState(history.state, '', cleanUrl);
+    }
+
+    // Cashfree: see cashfreeReturnUrl() above for why this is handled
+    // differently from PayU/Instamojo. If the browser comes back with
+    // ?cf_order=<order_id>, no verification has happened yet — do it now.
+    const cfOrderId = new URLSearchParams(location.search).get('cf_order');
+    if(cfOrderId){
+      try{
+        const verifyRes = await fetch(CF_FUNCTIONS_BASE + '/cashfree-verify-payment', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ order_id: cfOrderId })
+        });
+        const verify = await verifyRes.json();
+        if(verify.status === 'PAID'){
+          showToast('Payment received — thank you!');
+          if(currentInvoiceId){
+            await loadPublicInvoice(currentInvoiceId);
+            renderInvoiceDetail();
+          }
+        } else {
+          showToast('Payment not completed yet');
+        }
+      }catch(cfErr){
+        console.error(cfErr);
+      }
       const cleanUrl = location.pathname + location.hash;
       history.replaceState(history.state, '', cleanUrl);
     }
