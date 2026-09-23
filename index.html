@@ -644,12 +644,18 @@
         <div class="phone-verify-status" id="reg-phone-status">Verify this number with a 6-digit WhatsApp OTP.</div>
       </div>
 
-      <div class="field"><label>Email Address</label>
-        <input id="reg-email" type="email" placeholder="you@example.com" autocomplete="email">
+      <div class="field">
+        <label>Email Address</label>
+        <div class="verify-phone-row">
+          <input id="reg-email" type="email" placeholder="you@example.com" autocomplete="email"
+            oninput="syncRegisterEmailUI();">
+          <button type="button" class="verify-phone-btn" id="reg-email-verify-btn" onclick="startRegisterEmailVerification()">Verify</button>
+        </div>
+        <div class="phone-verify-status" id="reg-email-status">Verify your WhatsApp number first.</div>
       </div>
 
       <button class="btn" id="register-btn" onclick="completeRegistration()">Create Account</button>
-      <div class="login-note">Phone verification is required before creating your account.</div>
+      <div class="login-note">Phone and email verification are both required before creating your account.</div>
       <div class="switch-row">Already have an account? <button onclick="goto('login')">Log in</button></div>
     </div>
   </div>
@@ -4866,6 +4872,8 @@ window.addEventListener('beforeunload', ()=>{ saveState(); });
    ============================================================ */
 let registerPhoneVerified = false;
 let registerPhoneVerifiedE164 = '';
+let registerEmailVerified = false;
+let registerEmailVerifiedFor = '';
 
 function syncRegisterPhoneUI(){
   const input = document.getElementById('reg-phone');
@@ -4883,6 +4891,33 @@ function syncRegisterPhoneUI(){
   status.innerHTML = registerPhoneVerified
     ? '<span class="wa-otp-badge">✓ WhatsApp number verified</span>'
     : 'Verify this number with a 6-digit WhatsApp OTP.';
+  // Email can only be verified once a session exists, i.e. after phone
+  // verification succeeds, so keep the email button's enabled state in
+  // sync with phone status too.
+  syncRegisterEmailUI();
+}
+
+// Email verification uses Supabase's email_change OTP flow, which requires
+// an already-signed-in session — so it can only run after phone
+// verification has created one. It cannot run in parallel with phone
+// verification, only after it.
+function syncRegisterEmailUI(){
+  const input = document.getElementById('reg-email');
+  const btn = document.getElementById('reg-email-verify-btn');
+  const status = document.getElementById('reg-email-status');
+  if(!input || !btn || !status) return;
+  const email = input.value.trim().toLowerCase();
+  if(registerEmailVerified && email !== registerEmailVerifiedFor){
+    registerEmailVerified = false;
+    registerEmailVerifiedFor = '';
+  }
+  btn.disabled = !registerPhoneVerified || !EMAIL_RE.test(email) || registerEmailVerified;
+  btn.textContent = registerEmailVerified ? 'Verified ✓' : 'Verify';
+  btn.classList.toggle('verified', registerEmailVerified);
+  status.classList.toggle('verified', registerEmailVerified);
+  status.innerHTML = registerEmailVerified
+    ? '<span class="wa-otp-badge">✓ Email verified</span>'
+    : (registerPhoneVerified ? 'Verify this email with a 6-digit code.' : 'Verify your WhatsApp number first.');
 }
 
 // Updates the helper note under the login field as the user types, so it's
@@ -5000,8 +5035,8 @@ async function startRegisterPhoneVerification(){
     });
     if(error){
       showAuthError('reg-error',
-        /already|registered|exists/i.test(error.message||'')
-          ? 'This WhatsApp number is already registered. <button class="link-inline" onclick="goto(\'login\')">Log in instead</button>'
+        /already|registered|exists|duplicate key|unique constraint/i.test(error.message||'')
+          ? 'This WhatsApp number or email is already registered. <button class="link-inline" onclick="goto(\'login\')">Log in instead</button>'
           : (error.message || 'Could not send WhatsApp OTP. Please try again.'));
       return;
     }
@@ -5014,6 +5049,64 @@ async function startRegisterPhoneVerification(){
   }finally{
     setBtnBusy('reg-phone-verify-btn',false);
     syncRegisterPhoneUI();
+  }
+}
+
+async function startRegisterEmailVerification(){
+  hideAuthError('reg-error');
+  if(!registerPhoneVerified){
+    showAuthError('reg-error','Please verify your WhatsApp number first.');
+    return;
+  }
+  const email = document.getElementById('reg-email').value.trim().toLowerCase();
+  if(!EMAIL_RE.test(email)){
+    showAuthError('reg-error','Please enter a valid email address.');
+    return;
+  }
+
+  setBtnBusy('reg-email-verify-btn',true,'Sending…');
+  try{
+    const {data:existingByEmail, error:dupError} = await sb
+      .from('profiles')
+      .select('id')
+      .ilike('email', email)
+      .maybeSingle();
+    if(dupError){
+      showAuthError('reg-error', dupError.message || 'Could not verify the email. Please try again.');
+      return;
+    }
+    if(existingByEmail){
+      showAuthError('reg-error',
+        'This email is already registered. <button class="link-inline" onclick="goto(\'login\')">Log in instead</button>');
+      return;
+    }
+
+    // Requires an active session, which phone verification just created.
+    // Sends a 6-digit code IF the "Change Email Address" template in the
+    // Supabase dashboard includes {{ .Token }} — otherwise this sends a
+    // clickable link instead, and the code box below will have nothing to
+    // check against.
+    const {error} = await sb.auth.updateUser({email});
+    if(error){
+      showAuthError('reg-error',
+        /already|registered|exists|duplicate key|unique constraint/i.test(error.message||'')
+          ? 'This email is already registered. <button class="link-inline" onclick="goto(\'login\')">Log in instead</button>'
+          : (error.message || 'Could not send the email code. Please try again.'));
+      return;
+    }
+    otpContext = {
+      purpose:'register-email-change',
+      email,
+      pendingProfile:{
+        name: document.getElementById('reg-name').value.trim(),
+        designation: document.getElementById('reg-designation').value.trim(),
+        phone: document.getElementById('reg-phone').value.trim()
+      }
+    };
+    goto('otp');
+  }finally{
+    setBtnBusy('reg-email-verify-btn',false);
+    syncRegisterEmailUI();
   }
 }
 
@@ -5036,6 +5129,10 @@ async function completeRegistration(){
     showAuthError('reg-error','Please enter a valid email address.');
     return;
   }
+  if(!registerEmailVerified || registerEmailVerifiedFor !== email){
+    showAuthError('reg-error','Please verify your email address first.');
+    return;
+  }
 
   setBtnBusy('register-btn',true,'Creating…');
   try{
@@ -5043,19 +5140,25 @@ async function completeRegistration(){
     if(!session){
       showAuthError('reg-error','Your verification session expired. Please verify the number again.');
       registerPhoneVerified=false;
+      registerEmailVerified=false;
       syncRegisterPhoneUI();
       return;
     }
 
     const pending = {name,designation,phone,email};
-    await sb.from('profiles').upsert({
+    const {error:upsertError} = await sb.from('profiles').upsert({
       id:session.user.id,
       email,
       name,
       designation,
       phone,
-      phone_verified:true
+      phone_verified:true,
+      email_verified:true
     },{onConflict:'id'});
+    if(upsertError){
+      showAuthError('reg-error', upsertError.message || 'Could not save your profile. Please try again.');
+      return;
+    }
 
     await refreshAuthFromSession();
     if(!currentAuth){
@@ -5068,6 +5171,8 @@ async function completeRegistration(){
     otpContext=null;
     registerPhoneVerified=false;
     registerPhoneVerifiedE164='';
+    registerEmailVerified=false;
+    registerEmailVerifiedFor='';
     history.replaceState({screen:currentAuth.role==='admin'?'admin':'home'},'', '#/'+(currentAuth.role==='admin'?'admin':'home'));
     goto(currentAuth.role==='admin'?'admin':'home',{fromPopstate:true});
   }catch(e){
@@ -5082,11 +5187,12 @@ async function completeRegistration(){
 function renderOtpScreen(){
   if(!otpContext){ goto('login'); return; }
   hideAuthError('otp-error');
-  const isEmail = otpContext.purpose==='login-email';
-  const isRegister = otpContext.purpose==='register-phone';
+  const isEmail = otpContext.purpose==='login-email' || otpContext.purpose==='register-email-change';
+  const isRegister = otpContext.purpose==='register-phone' || otpContext.purpose==='register-email-change';
 
   if(isEmail){
-    document.getElementById('otp-title').textContent = 'Enter login code';
+    document.getElementById('otp-title').textContent =
+      otpContext.purpose==='register-email-change' ? 'Verify your email' : 'Enter login code';
     document.getElementById('otp-subtitle').innerHTML =
       'Enter the 6-digit code sent to <span style="color:var(--ink);font-weight:700;">'+otpContext.email+'</span>';
     document.getElementById('otp-devnote').textContent = '';
@@ -5106,7 +5212,7 @@ function renderOtpScreen(){
   const switchBtn=document.getElementById('otp-switch-btn');
   if(switchBtn){
     switchBtn.textContent = isRegister ? 'Back to registration' : (isEmail ? 'Use a different email' : 'Use a different number');
-    switchBtn.onclick=()=>goto(isRegister?'register':'login');
+    switchBtn.onclick=()=>{ if(isRegister) otpContext=null; goto(isRegister?'register':'login'); };
   }
 }
 
@@ -5130,6 +5236,8 @@ async function doResendOtp(){
       email:otpContext.email,
       options:{shouldCreateUser:false}
     }));
+  }else if(otpContext.purpose==='register-email-change'){
+    ({error}=await sb.auth.updateUser({email:otpContext.email}));
   }
   setBtnBusy('otp-resend-btn',false);
   if(error){
@@ -5156,7 +5264,9 @@ async function doVerifyOtp(){
   try{
     const verifyArgs = (otpContext.purpose==='login-email')
       ? {email:otpContext.email, token:code, type:'email'}
-      : {phone:otpContext.phone, token:code, type:'sms'};
+      : (otpContext.purpose==='register-email-change')
+        ? {email:otpContext.email, token:code, type:'email_change'}
+        : {phone:otpContext.phone, token:code, type:'sms'};
     const {data,error}=await sb.auth.verifyOtp(verifyArgs);
     if(error){
       showAuthError('otp-error',/expired/i.test(error.message||'')
@@ -5165,18 +5275,56 @@ async function doVerifyOtp(){
       return;
     }
 
+    if(otpContext.purpose==='register-email-change'){
+      const p = otpContext.pendingProfile || {};
+      const session = (await sb.auth.getSession()).data.session;
+      if(!session){
+        showAuthError('otp-error','Your verification session expired. Please start registration again.');
+        otpContext=null;
+        goto('register');
+        return;
+      }
+
+      const {error:upsertError} = await sb.from('profiles').upsert({
+        id:session.user.id,
+        email:otpContext.email,
+        name:p.name,
+        designation:p.designation,
+        phone:p.phone,
+        phone_verified:true,
+        email_verified:true
+      },{onConflict:'id'});
+      if(upsertError){
+        showAuthError('otp-error', upsertError.message || 'Could not save your profile. Please try again.');
+        return;
+      }
+
+      clearInterval(otpResendTimer);
+      otpContext=null;
+      registerPhoneVerified=false;
+      registerPhoneVerifiedE164='';
+      registerEmailVerified=false;
+      registerEmailVerifiedFor='';
+
+      await refreshAuthFromSession();
+      if(!currentAuth){
+        showAuthError('otp-error',accountSuspended?'Your account has been suspended. Please contact support.':'Could not load your account. Please try again.');
+        return;
+      }
+      await fetchAllData();
+      paintStaticChrome();
+      const target=currentAuth.role==='admin'?'admin':'home';
+      history.replaceState({screen:target},'', '#/'+target);
+      showToast('Account created');
+      goto(target,{fromPopstate:true});
+      return;
+    }
+
     if(otpContext.purpose==='register-phone'){
       const p=otpContext.pendingProfile;
-      if(data && data.session){
-        await sb.from('profiles').upsert({
-          id:data.session.user.id,
-          email:p.email,
-          name:p.name,
-          designation:p.designation,
-          phone:p.phone,
-          phone_verified:true
-        },{onConflict:'id'});
-      }
+      // Note: verifying the WhatsApp OTP does NOT save a profile row anymore.
+      // The profile is only written in completeRegistration(), when the
+      // user actually taps "Create Account".
       registerPhoneVerified=true;
       registerPhoneVerifiedE164=otpContext.phone;
       clearInterval(otpResendTimer);
