@@ -2795,6 +2795,15 @@ function renderAdminNoticesList(){
     if(!host) return;
     const shadow = host.attachShadow({ mode:'open' });
     shadow.innerHTML = n.body_html;
+    // innerHTML never executes <script> tags (Shadow DOM or not) —
+    // rebuild each one as a real script element so pasted countdowns /
+    // other inline scripts in a notice actually run in the preview too.
+    shadow.querySelectorAll('script').forEach(oldScript=>{
+      const newScript = document.createElement('script');
+      for(const attr of oldScript.attributes) newScript.setAttribute(attr.name, attr.value);
+      newScript.textContent = oldScript.textContent;
+      oldScript.replaceWith(newScript);
+    });
   });
 }
 function editAdminNotice(id){
