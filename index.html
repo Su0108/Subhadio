@@ -61,7 +61,7 @@
   body.dark-mode .auth-error { background:rgba(192,57,43,.15); }
   body.dark-mode .otp-boxes input { background:#3A332F; }
   body.dark-mode .field input, body.dark-mode .field select, body.dark-mode .field textarea { background:#3A332F; color:#F5F1EE; }
-  body.dark-mode .item-row input, body.dark-mode #ci-discount { background:#3A332F; color:#F5F1EE; }
+  body.dark-mode .item-row input, body.dark-mode #ci-discount, body.dark-mode #ci-tax { background:#3A332F; color:#F5F1EE; }
   body.dark-mode .screen::-webkit-scrollbar-thumb { background:#3A332F; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{height:100%;}
@@ -537,6 +537,14 @@
   .legal-doc .card{padding:20px 18px;}
   .legal-doc .badge{display:inline-block; font-size:11px; font-weight:700; padding:4px 10px; border-radius:99px; background:var(--blue-50); color:var(--blue); border:1px solid var(--blue-200); margin-bottom:14px;}
   .legal-doc footer{color:var(--muted); font-size:11px; margin-top:22px; text-align:center;}
+  .rep-month-btn{flex:1; min-width:0; text-align:center; font:inherit; color:var(--muted); border:0; background:transparent; padding:3px 5px; border-radius:6px; cursor:pointer;}
+  .rep-month-btn.active{color:var(--red); background:var(--red-50); font-weight:800;}
+  .rep-month-btn:focus-visible{outline:2px solid var(--red); outline-offset:2px;}
+  .rep-month-scroll{overflow-x:auto; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch;}
+  .rep-month-scroll #rep-chart{display:block; max-width:none;}
+  .rep-month-scroll #rep-chart-labels{flex-shrink:0;}
+  .rep-month-scroll #rep-chart circle{cursor:pointer;}
+  .rep-month-payments .listitem{cursor:default;}
   @keyframes spin{to{transform:rotate(360deg);}}
   @media print{
     .bottomnav, .sidebar, .topbar .iconbtn, .share-row, #app .qa, #app .qabtn, .fab{display:none !important;}
@@ -644,12 +652,18 @@
         <div class="phone-verify-status" id="reg-phone-status">Verify this number with a 6-digit WhatsApp OTP.</div>
       </div>
 
-      <div class="field"><label>Email Address</label>
-        <input id="reg-email" type="email" placeholder="you@example.com" autocomplete="email">
+      <div class="field">
+        <label>Email Address</label>
+        <div class="verify-phone-row">
+          <input id="reg-email" type="email" placeholder="you@example.com" autocomplete="email"
+            oninput="syncRegisterEmailUI();">
+          <button type="button" class="verify-phone-btn" id="reg-email-verify-btn" onclick="startRegisterEmailVerification()">Verify</button>
+        </div>
+        <div class="phone-verify-status" id="reg-email-status">Verify your WhatsApp number first.</div>
       </div>
 
       <button class="btn" id="register-btn" onclick="completeRegistration()">Create Account</button>
-      <div class="login-note">Phone verification is required before creating your account.</div>
+      <div class="login-note">Phone and email verification are both required before creating your account.</div>
       <div class="switch-row">Already have an account? <button onclick="goto('login')">Log in</button></div>
     </div>
   </div>
@@ -684,6 +698,7 @@
     <div class="topbar">
       <div><div class="muted" style="font-size:12.5px;">Admin Panel</div><h1>Dashboard</h1></div>
       <div class="row-icon" style="gap:8px;">
+        <div class="iconbtn" onclick="goto('admin-notices')" id="admin-notices-btn" title="App Notices"></div>
         <div class="iconbtn" onclick="goto('home')" title="Open StampBook" id="admin-home-btn"></div>
         <div class="iconbtn solid" onclick="doLogout()" id="admin-logout-btn"></div>
       </div>
@@ -749,6 +764,27 @@
       </div>
     </div>
 
+    <div id="admin-tab-whatsapp" style="display:none;">
+      <div class="section-head" style="padding-top:14px;"><h2>Broadcast WhatsApp</h2></div>
+      <div class="px">
+        <div class="card">
+          <div class="muted" style="font-size:11px;margin-bottom:8px;">Sent as a WhatsApp message to every matching user's registered WhatsApp number \u2014 also reaches suspended accounts, same as the email broadcast.</div>
+          <div class="field" style="margin-bottom:8px;"><textarea id="admin-wabroadcast-body" rows="3" placeholder="WhatsApp message this audience will receive"></textarea></div>
+          <div class="field" style="margin-bottom:8px;">
+            <label>Send to</label>
+            <select id="admin-wabroadcast-audience">
+              <option value="all">All Users</option>
+              <option value="active">Active Users Only</option>
+              <option value="suspended">Suspended Users Only</option>
+            </select>
+          </div>
+          <div class="auth-error" id="admin-wabroadcast-error"></div>
+          <div id="admin-wabroadcast-result" class="muted" style="font-size:11.5px;margin-bottom:8px;"></div>
+          <button class="btn" id="admin-wabroadcast-btn" onclick="doAdminBroadcastWhatsapp()">Send WhatsApp Broadcast</button>
+        </div>
+      </div>
+    </div>
+
     <div id="admin-tab-tickets" style="display:none;">
       <div class="section-head" style="padding-top:14px;"><h2>Support Tickets</h2></div>
       <div class="filters" id="admin-ticket-filters"></div>
@@ -782,6 +818,21 @@
   <div class="screen" id="screen-admin-user-detail">
     <div class="topbar"><div class="backrow"><div class="iconbtn" onclick="goto('admin')" id="aud-back"></div><h1>User Details</h1></div></div>
     <div class="px" id="admin-user-detail-body"></div>
+  </div>
+
+  <!-- Standalone Notices admin screen — no dashboard stats/charts, just the composer + list -->
+  <div class="screen" id="screen-admin-notices">
+    <div class="topbar"><div class="backrow"><div class="iconbtn" onclick="goto('admin')" id="an-back"></div><h1>App Notices</h1></div></div>
+    <div class="px">
+      <div class="card">
+        <div class="muted" style="font-size:11px;margin-bottom:8px;">Whatever you write here is shown as raw HTML on the public notices.html page (no login required).</div>
+        <div class="field" style="margin-bottom:8px;"><textarea id="admin-notice-body" rows="4" placeholder="&lt;b&gt;New Feature:&lt;/b&gt; ..."></textarea></div>
+        <div class="auth-error" id="admin-notice-error"></div>
+        <button class="btn" id="admin-notice-publish-btn" onclick="doAdminPublishNotice()">Publish Notice</button>
+      </div>
+    </div>
+    <div class="section-head" style="padding-top:14px;"><h2>Published Notices</h2></div>
+    <div class="px" id="admin-notice-list"></div>
   </div>
 
   <!-- 2. HOME -->
@@ -888,6 +939,8 @@
         <div class="totalsbox">
           <div class="trow"><span>Subtotal</span><span id="ci-subtotal">₹0</span></div>
           <div class="trow"><span>Discount (₹)</span><input id="ci-discount" type="number" min="0" value="0" style="width:80px;text-align:right;border:1px solid var(--line);background:#FDFCFB;border-radius:8px;padding:4px 8px;font-size:13px;font-family:inherit;" onfocus="if(this.value=='0')this.value='';" oninput="calcCreateTotals()"></div>
+          <div class="trow"><span>Tax (%)</span><input id="ci-tax" type="number" min="0" step="any" value="0" style="width:80px;text-align:right;border:1px solid var(--line);background:#FDFCFB;border-radius:8px;padding:4px 8px;font-size:13px;font-family:inherit;" onfocus="if(this.value=='0')this.value='';" oninput="calcCreateTotals()"></div>
+          <div class="trow" id="ci-tax-row" style="display:none;"><span>Tax amount</span><span id="ci-tax-amt">₹0</span></div>
           <div class="trow"><span>Charge (₹)</span><input id="ci-charge" type="number" min="0" value="0" style="width:80px;text-align:right;border:1px solid var(--line);background:#FDFCFB;border-radius:8px;padding:4px 8px;font-size:13px;font-family:inherit;" onfocus="if(this.value=='0')this.value='';" oninput="calcCreateTotals()"></div>
           <div class="trow"><span>Charge Reason</span><input id="ci-charge-reason" type="text" placeholder="e.g. Packaging fee" style="width:140px;text-align:right;border:1px solid var(--line);background:#FDFCFB;border-radius:8px;padding:4px 8px;font-size:13px;font-family:inherit;"></div>
           <div class="trow" id="ci-mdr-row" style="display:none;"><span>UPI MDR (0.4%)</span><span id="ci-mdr">₹0</span></div>
@@ -998,8 +1051,11 @@
       </div>
       <div class="card" style="margin-bottom:16px;">
         <div style="font-size:13px;font-weight:700;margin-bottom:10px;">Monthly Revenue</div>
-        <svg id="rep-chart" width="100%" height="120" viewBox="0 0 320 120" preserveAspectRatio="none"></svg>
-        <div id="rep-chart-labels" style="display:flex;justify-content:space-between;margin-top:6px;font-size:10.5px;color:var(--muted);"></div>
+        <div class="rep-month-scroll">
+          <svg id="rep-chart" width="320" height="120" viewBox="0 0 320 120" preserveAspectRatio="none"></svg>
+          <div id="rep-chart-labels" style="display:flex;justify-content:space-between;margin-top:6px;font-size:10.5px;color:var(--muted);"></div>
+        </div>
+        <div id="rep-month-payments" class="rep-month-payments" style="display:none;margin-top:12px;"></div>
       </div>
       <div class="card" style="margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -1073,17 +1129,15 @@
         <div class="field"><label>Invoice Prefix</label><input id="biz-prefix"></div>
         <div class="field"><label>Next Invoice No.</label><input id="biz-nextno" type="number"></div>
       </div>
-      <div class="row">
-        <div class="field"><label>Default Tax (%)</label><input id="biz-tax" type="number"></div>
-        <div class="field"><label>Currency</label>
-          <select id="biz-currency"><option>₹ INR</option><option>$ USD</option><option>€ EUR</option><option>£ GBP</option></select>
-        </div>
-      </div>
-      <div class="field"><label>Payment Terms</label>
-        <select id="biz-terms"><option>Due on receipt</option><option>Net 7</option><option>Net 15</option><option>Net 30</option></select>
+      <div class="field"><label>Default Tax (%)</label><input id="biz-tax" type="number"></div>
+      <div class="field"><label>Payment Terms (Optional)</label>
+        <textarea id="biz-terms" rows="2" placeholder="e.g. 50% advance, balance within 7 days"></textarea>
       </div>
       <div class="field"><label>Invoice Template</label>
-        <select id="biz-template"><option>Classic</option><option>Minimal</option><option>Bold</option></select>
+        <select id="biz-template">
+          <option>Classic</option><option>Minimal</option><option>Bold</option><option>Modern</option>
+          <option>Luxe</option><option>Editorial</option><option>Aster</option>
+        </select>
       </div>
 
       <div class="field"><label>Business Logo</label>
@@ -1594,7 +1648,7 @@ function ic(name, size, cls){
 
 // ---------------- state ----------------
 let profile = { name:'', designation:'', gender:'', phone:'', email:'' };
-let business = { name:'', address:'', gstin:'', pan:'', bankName:'', account:'', ifsc:'', upi:'', prefix:'SB', nextNo:1001, tax:0, currency:'₹ INR', terms:'Due on receipt', template:'Classic', logoUrl:'', themeColor:'#C0392B', mdrEnabled:false };
+let business = { name:'', address:'', gstin:'', pan:'', bankName:'', account:'', ifsc:'', upi:'', prefix:'SB', nextNo:1001, tax:0, currency:'₹ INR', terms:'', template:'Classic', logoUrl:'', themeColor:'#C0392B', mdrEnabled:false };
 // UPI New Rule (MDR) is a device-level toggle, stored the same way as Dark
 // Mode — it isn't part of the business_settings table, so turning it on/off
 // never touches Supabase and can't fail due to a missing column.
@@ -1635,6 +1689,7 @@ const CLOUDINARY_FOLDER = 'stampbook_logos';
 let clients = [];
 let invoices = [];
 let payments = [];
+let selectedRevenueMonth = null;
 let expenses = [];
 let activity = [];
 
@@ -1708,7 +1763,6 @@ async function refreshAuthFromSession(){
   if(prof.is_active === false){
     // Suspended by an admin — sign the session out immediately rather than
     // letting them sit half-authenticated with no way to use the app.
-    unsubscribeFromLiveUpdates();
     await sb.auth.signOut();
     currentAuth = null;
     accountSuspended = true;
@@ -1808,7 +1862,7 @@ async function fetchAllData(){
     name:biz.name||'', address:biz.address||'', gstin:biz.gstin||'', pan:biz.pan||'',
     bankName:biz.bank_name||'', account:biz.account||'', ifsc:biz.ifsc||'', upi:biz.upi||'',
     prefix:biz.prefix||'SB', nextNo:Number(biz.next_no||1001), tax:Number(biz.tax||0),
-    currency:biz.currency||'INR', terms:biz.terms||'Due on receipt', template:biz.template||'Classic',
+    currency:biz.currency||'INR', terms:biz.terms||'', template:biz.template||'Classic',
     logoUrl:biz.logo_url||'', themeColor:biz.theme_color||'#C0392B', mdrEnabled:loadMdrSetting()
   };
 
@@ -1829,37 +1883,6 @@ async function fetchAllData(){
   activity = (actRows||[]).map(mapActivityRow);
 
   saveCachedData();
-}
-
-// ---- Realtime: keep the signed-in owner's screen in sync when a payment
-// lands from elsewhere (a client paying a public invoice link on a
-// different tab/device, or the payment webhook writing straight to the
-// DB). Without this, `invoices`/`payments` in memory are frozen at
-// whatever fetchAllData() loaded at login until the owner manually
-// refreshes. Subscribed right after login/registration and torn down on
-// logout; scoped to this user's own rows only. ----
-let realtimeChannel = null;
-function subscribeToLiveUpdates(){
-  if(!currentAuth || realtimeChannel) return;
-  realtimeChannel = sb.channel('user-data-' + currentAuth.id)
-    .on('postgres_changes', { event:'*', schema:'public', table:'payments', filter:'user_id=eq.'+currentAuth.id },
-      () => { fetchAllData().then(refreshVisibleScreen); })
-    .on('postgres_changes', { event:'*', schema:'public', table:'invoices', filter:'user_id=eq.'+currentAuth.id },
-      () => { fetchAllData().then(refreshVisibleScreen); })
-    .subscribe();
-}
-function unsubscribeFromLiveUpdates(){
-  if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; }
-}
-// Re-paint whatever screen the owner is currently looking at once fresh
-// data has landed, the same way the cache-first boot path already does.
-function refreshVisibleScreen(){
-  const activeEl = document.querySelector('.screen.active');
-  const activeName = activeEl && activeEl.id.replace('screen-','');
-  const REFRESHABLE = ['home','invoices','clients','payments','reports','history','client-detail','invoice-detail'];
-  if(getAuth() && activeName && REFRESHABLE.includes(activeName)){
-    goto(activeName, { fromPopstate:true });
-  }
 }
 
 // ---- load a single invoice for an unauthenticated visitor who opened a
@@ -1897,7 +1920,7 @@ async function loadPublicInvoice(id){
     name:data.business.name||'', address:data.business.address||'', gstin:data.business.gstin||'', pan:data.business.pan||'',
     bankName:data.business.bank_name||'', account:data.business.account||'', ifsc:data.business.ifsc||'', upi:data.business.upi||'',
     prefix:data.business.prefix||'SB', nextNo:1, tax:Number(data.business.tax||0),
-    currency:data.business.currency||'INR', terms:data.business.terms||'Due on receipt', template:data.business.template||'Classic',
+    currency:data.business.currency||'INR', terms:data.business.terms||'', template:data.business.template||'Classic',
     logoUrl:data.business.logo_url||'', themeColor:data.business.theme_color||'#C0392B', mdrEnabled:loadMdrSetting()
   } : null;
 
@@ -2020,6 +2043,8 @@ function paintStaticChrome(){
   document.getElementById('app-favicon').href = LOGO_ICON_B64;
   document.getElementById('admin-home-btn').innerHTML = ic('home',18);
   document.getElementById('admin-logout-btn').innerHTML = ic('logout',18);
+  document.getElementById('admin-notices-btn').innerHTML = ic('bell',18);
+  document.getElementById('an-back').innerHTML = ic('back',18);
   document.getElementById('aud-back').innerHTML = ic('back',18);
   document.getElementById('admin-searchbar').innerHTML = ic('search',16)+'<input id="admin-search-input" placeholder="Search by name, email or phone..." oninput="renderAdminUserList()">';
   document.getElementById('home-bell-wrap').innerHTML = ic('bell',18) + '<span class="dot" id="home-bell-dot" style="display:none;"></span>';
@@ -2102,7 +2127,7 @@ function paintStaticChrome(){
 }
 
 // ---------------- navigation ----------------
-const CHROMELESS_SCREENS = ['splash','login','register','otp','admin','admin-user-detail'];
+const CHROMELESS_SCREENS = ['splash','login','register','otp','admin','admin-user-detail','admin-notices'];
 let navBusy = false;
 function goto(name, opts){
   opts = opts || {};
@@ -2114,7 +2139,7 @@ function goto(name, opts){
   if(!auth && !['splash','login','register','otp'].includes(name) && !isPublicInvoiceRoute){
     name = 'login';
   }
-  if((name==='admin' || name==='admin-user-detail') && (!auth || auth.role!=='admin')){
+  if((name==='admin' || name==='admin-user-detail' || name==='admin-notices') && (!auth || auth.role!=='admin')){
     name = auth ? 'home' : 'login';
   }
 
@@ -2130,6 +2155,7 @@ function goto(name, opts){
   document.body.classList.toggle('no-chrome', CHROMELESS_SCREENS.includes(name) || isPublicInvoiceRoute);
 
   if(name==='home') renderHome();
+  if(name==='admin-notices') fetchAdminNotices();
   if(name==='invoices') renderInvoices();
   if(name==='clients') renderClients();
   if(name==='payments') renderPayments();
@@ -2499,7 +2525,6 @@ async function doVerifyOtp(){
 async function doLogout(){
   if(!confirm('Log out of StampBook?')) return;
   if(currentAuth) clearCachedData(currentAuth.id);
-  unsubscribeFromLiveUpdates();
   await sb.auth.signOut();
   currentAuth = null;
   publicInvoiceView = false;
@@ -2515,6 +2540,8 @@ async function doLogout(){
 // ---- Admin panel ----
 let adminUsersCache = [];
 let adminGatewayCache = [];
+let adminNoticesCache = [];
+let editingNoticeId = null;
 let adminCrashCache = [];
 let adminChurnCache = [];
 let adminFailuresCache = [];
@@ -2529,6 +2556,7 @@ let adminMainTab = 'gateway';
 const ADMIN_MAIN_TABS = [
   ['gateway','Gateway', ()=> adminGatewayCache.filter(u=>u.active_gateway).length],
   ['broadcast','Broadcast', null],
+  ['whatsapp','WhatsApp', null],
   ['tickets','Tickets', ()=> adminTicketsCache.filter(t=>t.status!=='resolved').length],
   ['users','Users', ()=> adminUsersCache.length],
   ['crashes','Crashes', ()=> adminCrashCache.length],
@@ -2736,6 +2764,75 @@ async function doAdminSetRole(userId, newRole){
   await renderAdmin();
 }
 
+// ---------------- APP NOTICES (public, no-login notices.html page) ----------------
+async function fetchAdminNotices(){
+  const { data, error } = await sb.from('app_notices').select('*').order('created_at', { ascending:false });
+  if(error){ adminNoticesCache = []; renderAdminNoticesList(); return; }
+  adminNoticesCache = data || [];
+  renderAdminNoticesList();
+}
+function renderAdminNoticesList(){
+  const el = document.getElementById('admin-notice-list');
+  if(!el) return;
+  if(!adminNoticesCache.length){ el.innerHTML = '<div class="muted" style="font-size:12.5px;">No notices published yet.</div>'; return; }
+  el.innerHTML = adminNoticesCache.map((n,i)=>{
+    const d = new Date(n.created_at);
+    const dstr = String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+    return `<div class="card" style="margin-bottom:8px;">
+      <div class="muted" style="font-size:11px;margin-bottom:6px;">Date : ${dstr}</div>
+      <div data-notice-preview="${i}"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+        <button class="btn-ghost sm" style="flex:1;" onclick="editAdminNotice('${n.id}')">Edit</button>
+        <button class="btn-ghost sm" style="flex:1;color:var(--red);" onclick="deleteAdminNotice('${n.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+  // Isolate each notice's raw HTML in a Shadow DOM so a pasted <style>
+  // block or "body {...}" rule can't leak out and break the admin panel
+  // itself (same fix as on the public notices.html page).
+  adminNoticesCache.forEach((n,i)=>{
+    const host = el.querySelector(`[data-notice-preview="${i}"]`);
+    if(!host) return;
+    const shadow = host.attachShadow({ mode:'open' });
+    shadow.innerHTML = n.body_html;
+  });
+}
+function editAdminNotice(id){
+  const n = adminNoticesCache.find(x=>x.id===id);
+  if(!n) return;
+  editingNoticeId = id;
+  document.getElementById('admin-notice-body').value = n.body_html;
+  document.getElementById('admin-notice-publish-btn').textContent = 'Update Notice';
+  document.getElementById('admin-notice-body').scrollIntoView({behavior:'smooth', block:'center'});
+}
+async function doAdminPublishNotice(){
+  hideAuthError('admin-notice-error');
+  const body_html = document.getElementById('admin-notice-body').value.trim();
+  if(!body_html){ showAuthError('admin-notice-error','Please write the notice.'); return; }
+  const wasEditing = !!editingNoticeId;
+  setBtnBusy('admin-notice-publish-btn', true, wasEditing ? 'Updating\u2026' : 'Publishing\u2026');
+  let error;
+  if(wasEditing){
+    ({ error } = await sb.from('app_notices').update({ body_html }).eq('id', editingNoticeId));
+  }else{
+    ({ error } = await sb.from('app_notices').insert({ body_html }));
+  }
+  setBtnBusy('admin-notice-publish-btn', false, 'Publish Notice');
+  if(error){ showAuthError('admin-notice-error', error.message || 'Something went wrong.'); return; }
+  document.getElementById('admin-notice-body').value = '';
+  document.getElementById('admin-notice-publish-btn').textContent = 'Publish Notice';
+  editingNoticeId = null;
+  showToast(wasEditing ? 'Notice updated' : 'Notice published');
+  await fetchAdminNotices();
+}
+async function deleteAdminNotice(id){
+  if(!confirm('Delete this notice?')) return;
+  const { error } = await sb.from('app_notices').delete().eq('id', id);
+  if(error){ showToast('Could not delete'); return; }
+  showToast('Notice deleted');
+  await fetchAdminNotices();
+}
+
 async function doAdminBroadcast(){
   hideAuthError('admin-broadcast-error');
   document.getElementById('admin-broadcast-result').textContent = '';
@@ -2762,6 +2859,35 @@ async function doAdminBroadcast(){
     completeSendWait('Email broadcast sent!', resultMsg);
   } finally {
     setBtnBusy('admin-broadcast-btn', false);
+  }
+}
+
+async function doAdminBroadcastWhatsapp(){
+  hideAuthError('admin-wabroadcast-error');
+  document.getElementById('admin-wabroadcast-result').textContent = '';
+  const body = document.getElementById('admin-wabroadcast-body').value.trim();
+  const audience = document.getElementById('admin-wabroadcast-audience').value; // 'all' | 'active' | 'suspended'
+  if(!body){ showAuthError('admin-wabroadcast-error', 'Please write a message.'); return; }
+  setBtnBusy('admin-wabroadcast-btn', true, 'Sending\u2026');
+  showSendWait('Sending broadcast…', 'Delivering your WhatsApp message to recipients.');
+  try{
+    // Same reasoning as doAdminBroadcast: suspended accounts are signed out
+    // on login and never see in-app notifications, so this goes out as a
+    // real WhatsApp message via the admin-broadcast-whatsapp Edge Function
+    // (WhatsApp Cloud API / provider of your choice). This edge function is
+    // not included here — deploy your own at
+    // supabase/functions/admin-broadcast-whatsapp/index.ts, mirroring
+    // admin-broadcast-email but sending via your WhatsApp provider using
+    // each matching profile's phone number instead of email.
+    const { data, error } = await sb.functions.invoke('admin-broadcast-whatsapp', { body: { body, audience } });
+    if(error){ hideSendWait(); showAuthError('admin-wabroadcast-error', error.message || 'Something went wrong.'); return; }
+    const resultMsg = data && typeof data.sent==='number'
+      ? `Sent to ${data.sent} of ${data.total} matching user(s).` : 'Sent.';
+    document.getElementById('admin-wabroadcast-result').textContent = resultMsg;
+    document.getElementById('admin-wabroadcast-body').value = '';
+    completeSendWait('WhatsApp broadcast sent!', resultMsg);
+  } finally {
+    setBtnBusy('admin-wabroadcast-btn', false);
   }
 }
 
@@ -3039,6 +3165,25 @@ async function doAdminSendEmail(userId){
   }
 }
 
+// ---------------- Individual WhatsApp message to a user (admin) ----------------
+// Sent via the admin-send-whatsapp Edge Function (your WhatsApp provider,
+// e.g. WhatsApp Cloud API), mirroring admin-send-email. Not included here —
+// deploy your own at supabase/functions/admin-send-whatsapp/index.ts, using
+// each profile's phone number instead of email.
+async function doAdminSendWhatsapp(userId){
+  hideAuthError('admin-wa-error');
+  const msg = document.getElementById('admin-wa-body').value.trim();
+  if(!msg){ showAuthError('admin-wa-error', 'Please write a message.'); return; }
+  setBtnBusy('admin-wa-btn', true, 'Sending\u2026');
+  try{
+    const { error } = await sb.functions.invoke('admin-send-whatsapp', { body: { user_id:userId, message:msg } });
+    if(error){ showAuthError('admin-wa-error', error.message || 'Something went wrong.'); return; }
+    document.getElementById('admin-wa-body').value = '';
+  } finally {
+    setBtnBusy('admin-wa-btn', false);
+  }
+}
+
 // ---- Admin: single user's full history (clients/invoices/payments) ----
 // Reads via the admin_get_user_data RPC (SECURITY DEFINER, admin-only —
 // see the accompanying SQL) instead of selecting clients/invoices/payments
@@ -3110,6 +3255,13 @@ function renderAdminUserDetail(){
       <div class="field" style="margin-bottom:8px;"><textarea id="admin-email-body" rows="4" placeholder="Message"></textarea></div>
       <div class="auth-error" id="admin-email-error"></div>
       <button class="btn" id="admin-email-btn" onclick="doAdminSendEmail('${u.id}')">Send Email</button>
+    </div>
+
+    <div class="section-head" style="padding-top:14px;"><h2>WhatsApp This User</h2></div>
+    <div class="card">
+      <div class="field" style="margin-bottom:8px;"><textarea id="admin-wa-body" rows="4" placeholder="Message"></textarea></div>
+      <div class="auth-error" id="admin-wa-error"></div>
+      <button class="btn" id="admin-wa-btn" onclick="doAdminSendWhatsapp('${u.id}')">Send WhatsApp</button>
     </div>`;
 
   if(!adminDetailData){
@@ -3544,9 +3696,56 @@ async function buildInvoicePDF(invId){
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 40;
   const theme = hexToRgb(business.themeColor);
-
-  doc.setFillColor(theme[0], theme[1], theme[2]);
-  doc.rect(0,0,pageW,90,'F');
+  // Invoice template: Classic (default colored band), Minimal (white header,
+  // thin accent line, light table), Bold (taller band, big title, accent
+  // totals), Modern/Aster (card-based layouts), Luxe (dark editorial luxury)
+  // or Editorial (clean magazine-style rules).
+  const supportedTemplates = ['Classic','Minimal','Bold','Modern','Luxe','Editorial','Aster'];
+  const tpl = supportedTemplates.includes(business.template) ? business.template : 'Classic';
+  // Keep every PDF section on the same content grid. Modern used to inset the
+  // customer/totals blocks by 16pt while the table and header still used the
+  // outer page margin, which made the template look misaligned.
+  const contentInset = ['Modern','Aster'].includes(tpl) ? 16 : 0;
+  const mL = margin + contentInset;
+  const mR = pageW - margin - contentInset;
+  const headerH = tpl==='Bold' ? 110
+    : (['Modern','Luxe','Aster'].includes(tpl) ? 100
+    : (tpl==='Editorial' ? 96 : 90));
+  const hy = headerH/2;
+  const pageHfull = doc.internal.pageSize.getHeight();
+  if(tpl==='Minimal'){
+    doc.setDrawColor(theme[0], theme[1], theme[2]); doc.setLineWidth(2);
+    doc.line(mL, headerH-4, mR, headerH-4);
+    doc.setLineWidth(0.2);
+  } else if(['Modern','Aster'].includes(tpl)){
+    // Slim full-height accent sidebar down the left edge, plus a light
+    // double rule under the header instead of a solid colour band.
+    doc.setFillColor(theme[0], theme[1], theme[2]);
+    doc.rect(0,0,7,pageHfull,'F');
+    doc.setDrawColor(theme[0], theme[1], theme[2]); doc.setLineWidth(1.4);
+    doc.line(mL, headerH-6, mR, headerH-6);
+    doc.setDrawColor(230,222,216); doc.setLineWidth(0.6);
+    doc.line(mL, headerH-2, mR, headerH-2);
+    doc.setLineWidth(0.2);
+  } else if(tpl==='Luxe'){
+    // Deep ink header with a restrained gold rule for a premium stationery
+    // feel. The user's theme color still controls the invoice accent below.
+    doc.setFillColor(31, 28, 27);
+    doc.rect(0,0,pageW,headerH,'F');
+    doc.setFillColor(214,170,83);
+    doc.rect(margin, headerH-5, pageW-margin*2, 5, 'F');
+  } else if(tpl==='Editorial'){
+    // Two asymmetric rules create a magazine/editorial header without a
+    // heavy colour band.
+    doc.setDrawColor(34,29,27); doc.setLineWidth(1.4);
+    doc.line(mL, 22, mL+86, 22);
+    doc.setDrawColor(theme[0], theme[1], theme[2]); doc.setLineWidth(2.2);
+    doc.line(mL+92, 22, mR, 22);
+    doc.setLineWidth(0.2);
+  } else {
+    doc.setFillColor(theme[0], theme[1], theme[2]);
+    doc.rect(0,0,pageW,headerH,'F');
+  }
   // Prefer the business's own uploaded logo; fall back to the default
   // StampBook mark. Cloudinary images must be converted to a data URL
   // first since jsPDF can't draw a plain remote URL.
@@ -3556,9 +3755,9 @@ async function buildInvoicePDF(invId){
     catch(e){ console.error(e); logoDataUrl = LOGO_ICON_B64; }
   }
   try{
-    const cx = margin+18, cy = 45, r = 20;
+    const cx = mL+18, cy = hy, r = 20;
     doc.setFillColor(255,255,255);
-    doc.circle(cx, cy, r, 'F');
+    if(tpl==='Minimal'||tpl==='Modern'){ doc.setDrawColor(230,222,216); doc.circle(cx, cy, r, 'FD'); } else doc.circle(cx, cy, r, 'F');
     // Center-crop to a square first so the image isn't stretched, then
     // clip to a circle so it fills the white disc cleanly with no
     // squares peeking past the rounded edge.
@@ -3575,61 +3774,115 @@ async function buildInvoicePDF(invId){
     // broken logo never blocks the whole invoice from generating.
     try{
       doc.setFillColor(255,255,255);
-      doc.circle(margin+18, 45, 20, 'F');
+      doc.circle(mL+18, hy, 20, 'F');
       const logoFormat = /^data:image\/(\w+)/.exec(logoDataUrl);
-      doc.addImage(logoDataUrl, (logoFormat ? logoFormat[1] : 'PNG').toUpperCase(), margin+3, 30, 30, 30);
+      doc.addImage(logoDataUrl, (logoFormat ? logoFormat[1] : 'PNG').toUpperCase(), mL+3, hy-15, 30, 30);
     }catch(e2){}
   }
-  doc.setTextColor(255,255,255);
+  const onBand = ['Classic','Bold','Luxe'].includes(tpl);
+  if(onBand) doc.setTextColor(255,255,255); else doc.setTextColor(30,25,23);
   doc.setFont('helvetica','bold'); doc.setFontSize(20);
-  doc.text(business.name || 'StampBook', margin+46, 40);
+  doc.text(business.name || 'StampBook', mL+46, hy-5);
   doc.setFont('helvetica','normal'); doc.setFontSize(10);
-  doc.text(business.address || '', margin+46, 58);
-  doc.setFont('helvetica','bold'); doc.setFontSize(22);
-  doc.text('INVOICE', pageW-margin, 42, { align:'right' });
+  if(!onBand) doc.setTextColor(120,110,105);
+  doc.text(business.address || '', mL+46, hy+13, { maxWidth: Math.max(120, mR-(mL+46)-150) });
+  if(tpl==='Luxe') doc.setTextColor(234,198,115);
+  else if(!onBand) doc.setTextColor(theme[0], theme[1], theme[2]);
+  doc.setFont('helvetica','bold'); doc.setFontSize(tpl==='Bold' ? 30 : (['Modern','Luxe','Aster'].includes(tpl) ? 26 : 22));
+  doc.text('INVOICE', mR, hy-3, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(11);
-  doc.text('#'+inv.id, pageW-margin, 60, { align:'right' });
+  if(tpl==='Luxe') doc.setTextColor(246,224,170);
+  else if(!onBand) doc.setTextColor(120,110,105);
+  doc.text('#'+inv.id, mR, hy+15, { align:'right' });
 
   doc.setTextColor(30,25,23);
-  let y = 118;
+  let y = headerH + 28;
+  if(['Modern','Aster'].includes(tpl)){
+    const cardY = headerH + 14, cardH = 126;
+    const cardX = mL - 12, cardW = (mR-mL) + 24;
+    if(tpl==='Aster'){
+      doc.setFillColor(241,248,247); doc.setDrawColor(205,228,224);
+    } else {
+      doc.setFillColor(248,246,244); doc.setDrawColor(236,230,225);
+    }
+    doc.setLineWidth(0.7);
+    // Give the Modern customer card a little more breathing room than the
+    // text grid, while keeping it centered around the same content column.
+    doc.roundedRect(cardX, cardY, cardW, cardH, 8, 8, 'FD');
+    doc.setLineWidth(0.2);
+    y = cardY + 22;
+  }
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('BILLED TO', margin, y);
+  doc.text('BILLED TO', mL, y);
   doc.setFont('helvetica','normal'); doc.setFontSize(11);
-  doc.text(c.name || '-', margin, y+16);
+  doc.text(c.name || '-', mL, y+16);
   doc.setFontSize(9.5); doc.setTextColor(120,110,105);
   let cy = y+30;
-  if(c.address){ doc.text(c.address, margin, cy, {maxWidth:230}); cy += 13; }
-  if(c.phone){ doc.text(c.phone, margin, cy); cy += 13; }
-  if(c.email){ doc.text(c.email, margin, cy); cy += 13; }
-  if(c.gstin){ doc.text('GSTIN: '+c.gstin, margin, cy); }
+  const clientTextWidth = Math.min(250, Math.max(150, (mR-mL)*0.48));
+  if(c.address){
+    const addressLines = doc.splitTextToSize(c.address, clientTextWidth).slice(0,2);
+    doc.text(addressLines, mL, cy);
+    cy += 13 * addressLines.length;
+  }
+  if(c.phone){ doc.text(c.phone, mL, cy); cy += 13; }
+  if(c.email){ doc.text(c.email, mL, cy); cy += 13; }
+  if(c.gstin){ doc.text('GSTIN: '+c.gstin, mL, cy); }
 
   doc.setTextColor(30,25,23); doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('INVOICE DATE', pageW-margin, y, { align:'right' });
+  doc.text('INVOICE DATE', mR, y, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
-  doc.text(fmtDate(inv.date), pageW-margin, y+15, { align:'right' });
+  doc.text(fmtDate(inv.date), mR, y+15, { align:'right' });
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('DUE DATE', pageW-margin, y+34, { align:'right' });
+  doc.text('DUE DATE', mR, y+34, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
-  doc.text(fmtDate(inv.dueDate), pageW-margin, y+49, { align:'right' });
+  doc.text(fmtDate(inv.dueDate), mR, y+49, { align:'right' });
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('STATUS', pageW-margin, y+68, { align:'right' });
-  doc.setTextColor(theme[0], theme[1], theme[2]); doc.text(inv.status, pageW-margin, y+83, { align:'right' });
+  doc.text('STATUS', mR, y+68, { align:'right' });
+  doc.setTextColor(theme[0], theme[1], theme[2]); doc.text(inv.status, mR, y+83, { align:'right' });
   doc.setTextColor(30,25,23);
 
   const rows = inv.lineItems.map(it=>[it.name, String(it.qty), pdfRupee(it.price), pdfRupee(it.qty*it.price)]);
+  const tblHead = tpl==='Minimal'
+    ? { fillColor:[244,241,238], textColor:[30,25,23], fontStyle:'bold' }
+    : tpl==='Bold'
+      ? { fillColor:[theme[0],theme[1],theme[2]], textColor:[255,255,255], fontStyle:'bold' }
+      : tpl==='Luxe'
+        ? { fillColor:[214,170,83], textColor:[31,28,27], fontStyle:'bold' }
+      : ['Modern','Editorial','Aster'].includes(tpl)
+        ? { fillColor:[255,255,255], textColor:[theme[0],theme[1],theme[2]], fontStyle:'bold', lineWidth:{bottom:1.2}, lineColor:[theme[0],theme[1],theme[2]] }
+        : { fillColor:[34,29,27], textColor:[255,255,255], fontStyle:'bold' };
   doc.autoTable({
-    startY: 210,
+    // The taller Modern card needs a matching table offset so the table
+    // starts below the rounded background instead of inside it.
+    startY: Math.max(['Modern','Aster'].includes(tpl) ? y + 120 : y + 92, cy + 14),
     head: [['Item / Service','Qty','Rate','Amount']],
     body: rows,
+    theme: (['Minimal','Modern','Editorial','Aster'].includes(tpl)) ? 'plain' : 'striped',
     styles:{ font:'helvetica', fontSize:10, cellPadding:8, textColor:[30,25,23] },
-    headStyles:{ fillColor:[34,29,27], textColor:[255,255,255], fontStyle:'bold' },
-    alternateRowStyles:{ fillColor:[251,248,245] },
+    headStyles: tblHead,
+    alternateRowStyles: (['Minimal','Modern','Editorial','Aster'].includes(tpl)) ? {} : { fillColor:[251,248,245] },
     columnStyles:{ 1:{halign:'center',cellWidth:50}, 2:{halign:'right',cellWidth:90}, 3:{halign:'right',cellWidth:100} },
-    margin:{ left:margin, right:margin }
+    margin:{ left:mL, right:pageW-mR },
+    didParseCell: function(d){
+      // AutoTable applies columnStyles to body cells, but not reliably to
+      // header cells. Explicitly mirror the body alignment so each heading
+      // sits over the values in its own column.
+      if(d.section==='head'){
+        const headerAlign = ['left','center','right','right'];
+        d.cell.styles.halign = headerAlign[d.column.index] || 'left';
+      }
+    },
+    didDrawCell: function(d){
+      if((['Minimal','Modern','Editorial','Aster'].includes(tpl)) && d.section==='body'){
+        const lineColor = tpl==='Aster' ? [205,228,224] : [230,222,216];
+        doc.setDrawColor(lineColor[0],lineColor[1],lineColor[2]); doc.setLineWidth(0.5);
+        doc.line(d.cell.x, d.cell.y+d.cell.height, d.cell.x+d.cell.width, d.cell.y+d.cell.height);
+      }
+    }
   });
 
   let ty = doc.lastAutoTable.finalY + 20;
-  const totalsX = pageW-margin;
+  const totalsX = mR;
   function totalLine(label, val, bold, color){
     doc.setFont('helvetica', bold?'bold':'normal'); doc.setFontSize(bold?12:10.5);
     if(color) doc.setTextColor(color[0],color[1],color[2]); else doc.setTextColor(80,72,68);
@@ -3645,24 +3898,54 @@ async function buildInvoicePDF(invId){
   doc.setDrawColor(230,222,216); doc.line(totalsX-150, ty-8, totalsX, ty-8);
   totalLine('Total', pdfRupee(inv.total), true);
   totalLine('Paid', pdfRupee(inv.paid), false, [14,143,92]);
-  totalLine('Balance Due', pdfRupee(inv.due), true, theme);
+  if(tpl==='Bold' || tpl==='Luxe'){
+     // Leave a clear gap after Paid so the boxed Balance Due row does not
+     // visually collide with the previous line in PDF viewers.
+     ty += 6;
+    if(tpl==='Luxe') doc.setFillColor(214,170,83);
+    else doc.setFillColor(theme[0], theme[1], theme[2]);
+    doc.roundedRect(totalsX-160, ty-15, 160, 26, 4, 4, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(12);
+    if(tpl==='Luxe') doc.setTextColor(31,28,27); else doc.setTextColor(255,255,255);
+    doc.text('Balance Due', totalsX-150, ty+2);
+    doc.text(pdfRupee(inv.due), totalsX-8, ty+2, { align:'right' });
+    ty += 28;
+  } else if(tpl==='Modern' || tpl==='Aster'){
+     // Keep Balance Due visually separated from Paid while retaining the
+     // same totals-column right edge.
+     ty += 6;
+    if(tpl==='Aster'){
+      doc.setFillColor(241,248,247); doc.setDrawColor(theme[0], theme[1], theme[2]); doc.setLineWidth(1.2);
+      doc.roundedRect(totalsX-160, ty-15, 160, 26, 5, 5, 'FD');
+    } else {
+      doc.setDrawColor(theme[0], theme[1], theme[2]); doc.setLineWidth(1.2);
+      doc.roundedRect(totalsX-160, ty-15, 160, 26, 5, 5, 'D');
+    }
+    doc.setLineWidth(0.2);
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(theme[0], theme[1], theme[2]);
+    doc.text('Balance Due', totalsX-150, ty+2);
+    doc.text(pdfRupee(inv.due), totalsX-8, ty+2, { align:'right' });
+    ty += 28;
+  } else {
+    totalLine('Balance Due', pdfRupee(inv.due), true, theme);
+  }
 
   ty += 14;
   if(business.upi || business.account){
     const detailsStartY = ty;
     doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(30,25,23);
-    doc.text('Payment Details', margin, ty); ty += 15;
+    doc.text('Payment Details', mL, ty); ty += 15;
     doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(100,92,88);
-    if(business.bankName) { doc.text('Bank: '+business.bankName, margin, ty); ty+=13; }
-    if(business.account) { doc.text('A/C: '+business.account+(business.ifsc?'  ·  IFSC: '+business.ifsc:''), margin, ty); ty+=13; }
-    if(business.upi) { doc.text('UPI: '+business.upi, margin, ty); ty+=13; }
+    if(business.bankName) { doc.text('Bank: '+business.bankName, mL, ty); ty+=13; }
+    if(business.account) { doc.text('A/C: '+business.account+(business.ifsc?'  ·  IFSC: '+business.ifsc:''), mL, ty); ty+=13; }
+    if(business.upi) { doc.text('UPI: '+business.upi, mL, ty); ty+=13; }
     if(business.upi && inv.due>0){
       const qrAmount = inv.due.toFixed(2);
       const qrDataUrl = buildUpiQrDataUrl(business.upi, business.name||'StampBook', qrAmount, inv.id);
       if(qrDataUrl){
         const qrSize = 78;
         const boxWidth = 128;
-        const boxRight = pageW - margin;
+        const boxRight = mR;
         const boxLeft = boxRight - boxWidth;
         const qrX = boxLeft + (boxWidth-qrSize)/2;
         const qrY = detailsStartY - 6;
@@ -3682,7 +3965,8 @@ async function buildInvoicePDF(invId){
   }
   if(business.terms){
     doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(140,132,127);
-    doc.text('Payment Terms: '+business.terms, margin, doc.internal.pageSize.getHeight()-40);
+    const termLines = doc.splitTextToSize('Payment Terms: '+business.terms, doc.internal.pageSize.getWidth()-margin*2).slice(0,3);
+    doc.text(termLines, margin, doc.internal.pageSize.getHeight()-40-(termLines.length-1)*11);
   }
   doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(170,163,158);
   doc.text('Generated with StampBook · Powered by Mandal Industries', margin, doc.internal.pageSize.getHeight()-24);
@@ -3911,6 +4195,7 @@ function renderCreateScreen(){
   sel.innerHTML = clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   createItems = [{name:'',qty:1,price:0}];
   document.getElementById('ci-discount').value = 0;
+  document.getElementById('ci-tax').value = Number(business.tax||0);
   document.getElementById('ci-charge').value = 0;
   document.getElementById('ci-charge-reason').value = '';
   hideQuickAddClient();
@@ -3929,13 +4214,22 @@ function renderCreateItems(){
 function updateItem(idx,key,val){ createItems[idx][key] = key==='name'?val:Number(val); calcCreateTotals(); }
 function addItemRow(){ createItems.push({name:'',qty:1,price:0}); renderCreateItems(); }
 function removeItem(idx){ if(createItems.length>1){ createItems.splice(idx,1); renderCreateItems(); calcCreateTotals(); } }
+// Tax is calculated on the subtotal BEFORE discount is deducted.
+function taxAmountFor(subtotal, ratePct){
+  const r = Number(ratePct||0);
+  return r>0 ? Math.round(subtotal*r)/100 : 0;
+}
 function calcCreateTotals(){
   const subtotal = createItems.reduce((s,i)=>s+Number(i.qty||0)*Number(i.price||0),0);
   const discount = Number(document.getElementById('ci-discount').value||0);
   const charge = Number(document.getElementById('ci-charge').value||0);
-  const billed = Math.max(subtotal-discount,0)+charge;
+  const taxRate = Number(document.getElementById('ci-tax').value||0);
+  const tax = taxAmountFor(subtotal, taxRate);
+  const billed = Math.max(subtotal-discount,0)+tax+charge;
   const mdr = mdrChargeFor(billed);
   document.getElementById('ci-subtotal').textContent = rupee(subtotal);
+  document.getElementById('ci-tax-row').style.display = tax>0 ? 'flex' : 'none';
+  document.getElementById('ci-tax-amt').textContent = rupee(tax);
   document.getElementById('ci-mdr-row').style.display = mdr>0 ? 'flex' : 'none';
   document.getElementById('ci-mdr').textContent = rupee(mdr);
   document.getElementById('ci-total').textContent = rupee(billed+mdr);
@@ -4014,12 +4308,16 @@ async function saveInvoice(stage, btn){
     const discount = Number(document.getElementById('ci-discount').value||0);
     const charge = Number(document.getElementById('ci-charge').value||0);
     const chargeReason = document.getElementById('ci-charge-reason').value.trim();
-    const billed = Math.max(items.reduce((s,i)=>s+i.qty*i.price,0) - discount, 0) + charge;
+    const subtotalSave = items.reduce((s,i)=>s+i.qty*i.price,0);
+    const taxRate = Number(document.getElementById('ci-tax').value||0);
+    const tax = taxAmountFor(subtotalSave, taxRate);
+    const billed = Math.max(subtotalSave - discount, 0) + tax + charge;
     const mdr = mdrChargeFor(billed);
     const total = billed + mdr;
     // Charge and MDR are recorded as invoice_items rows (there's no separate
     // charges column), but with the extra-charge marker so they render in
     // the totals box under Discount — not in the Items / Services list.
+    if(tax>0) items.push(makeChargeItem('Tax ('+taxRate+'%)', tax));
     if(charge>0) items.push(makeChargeItem(chargeReason || 'Additional Charge', charge));
     if(mdr>0) items.push(makeChargeItem('UPI MDR (0.4%)', mdr));
     const date = document.getElementById('ci-date').value;
@@ -4331,50 +4629,120 @@ function renderReports(){
   }
   calcRangeRevenue();
 
-  // Group revenue by calendar month (previously this grouped by exact
-  // invoice date, so a "Monthly Revenue" chart with many invoices on
-  // different days turned into a noisy point-per-date zigzag instead of
-  // an actual month-over-month trend). Show the most recent 6 months,
-  // oldest to newest, including zero-revenue months so the line stays
-  // continuous and labeled.
+  // Group actual received payments by their payment date, month by month.
   const byMonth = {};
-  allInvoicesComputed().filter(i=>i.stage!=='cancelled').forEach(i=>{
-    if(!i.date) return;
-    const key = i.date.slice(0,7); // 'YYYY-MM'
-    byMonth[key] = (byMonth[key]||0) + i.total;
+  const paymentMonths = [];
+  payments.forEach(p=>{
+    if(!p.date || !/^\d{4}-\d{2}-\d{2}$/.test(p.date)) return;
+    const key = p.date.slice(0,7); // 'YYYY-MM'
+    byMonth[key] = (byMonth[key]||0) + Number(p.amount||0);
+    paymentMonths.push(key);
   });
   const now = new Date();
+  const currentMonthKey=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const defaultStart=new Date(now.getFullYear(),now.getMonth()-5,1);
+  const firstMonthKey=paymentMonths.length?paymentMonths.reduce((a,b)=>a<b?a:b):defaultStart.getFullYear()+'-'+String(defaultStart.getMonth()+1).padStart(2,'0');
+  const lastMonthKey=paymentMonths.length?paymentMonths.reduce((a,b)=>a>b?a:b,currentMonthKey):currentMonthKey;
   const monthKeys = [];
-  for(let k=5;k>=0;k--){
-    const d = new Date(now.getFullYear(), now.getMonth()-k, 1);
+  const firstMonthParts=firstMonthKey.split('-').map(Number);
+  const lastMonthParts=lastMonthKey.split('-').map(Number);
+  for(let d=new Date(firstMonthParts[0],firstMonthParts[1]-1,1),end=new Date(lastMonthParts[0],lastMonthParts[1]-1,1);d<=end;d.setMonth(d.getMonth()+1)){
     monthKeys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
   }
-  const monthLabels = monthKeys.map(k=>{
+  const monthNames = monthKeys.map(k=>{
     const [y,m] = k.split('-').map(Number);
-    return new Date(y, m-1, 1).toLocaleDateString('en-GB',{month:'short'});
+    return new Date(y,m-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
   });
+  const monthLabels = monthKeys.map((k,index)=>{
+    const [y,m] = k.split('-').map(Number);
+    const shortMonth=new Date(y,m-1,1).toLocaleDateString('en-GB',{month:'short'});
+    return index===0 || m===1 ? `${shortMonth} ’${String(y).slice(-2)}` : shortMonth;
+  });
+  if(selectedRevenueMonth && !monthKeys.includes(selectedRevenueMonth)) selectedRevenueMonth=null;
   const vals = monthKeys.map(k=>byMonth[k]||0);
   const svg = document.getElementById('rep-chart');
   const labelsEl = document.getElementById('rep-chart-labels');
-  if(vals.every(v=>v===0)){ svg.innerHTML=''; if(labelsEl) labelsEl.innerHTML=''; return; }
-  const w=320,h=120,pad=10;
-  const maxV = Math.max(...vals,1);
-  const stepX = (w-2*pad)/Math.max(vals.length-1,1);
-  const pts = vals.map((v,idx)=>{
-    const x = pad + idx*stepX;
-    const y = h-pad - (v/maxV)*(h-2*pad);
-    return [x,y];
-  });
-  const path = pts.map((p,idx)=> (idx===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
-  const area = path + ` L${pts[pts.length-1][0].toFixed(1)},${h-pad} L${pts[0][0].toFixed(1)},${h-pad} Z`;
+  const h=120,pad=10;
+  const w=Math.max(320,20+(monthKeys.length-1)*52);
+  const chartWidth=monthKeys.length<=6?'100%':`${w}px`;
+  const maxV=Math.max(...vals,1);
+  const stepX=vals.length>1?(w-2*pad)/(vals.length-1):0;
+  const points=vals.map((value,index)=>[vals.length>1?pad+index*stepX:w/2,h-pad-(value/maxV)*(h-2*pad)]);
+  const path = points.map((point,index)=>(index===0?'M':'L')+point[0].toFixed(1)+','+point[1].toFixed(1)).join(' ');
+  const area=path+` L${points[points.length-1][0].toFixed(1)},${h-pad} L${points[0][0].toFixed(1)},${h-pad} Z`;
+  svg.setAttribute('width',chartWidth);
+  svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
   svg.innerHTML = `
     <path d="${area}" fill="#F8DAD4" stroke="none"></path>
     <path d="${path}" fill="none" stroke="#C0392B" stroke-width="2.5"></path>
-    ${pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="#C0392B"></circle>`).join('')}
+    ${points.map((p,idx)=>`<g data-month-key="${monthKeys[idx]}" tabindex="0" role="button" aria-label="Show ${monthNames[idx]} payments" style="cursor:pointer;"><circle cx="${p[0]}" cy="${p[1]}" r="7" fill="transparent"></circle><circle cx="${p[0]}" cy="${p[1]}" r="3" fill="#C0392B"><title>${monthNames[idx]}: ${rupee(vals[idx])} received</title></circle></g>`).join('')}
   `;
+  svg.onclick=event=>{
+    const point=event.target.closest&&event.target.closest('[data-month-key]');
+    if(point) toggleMonthlyPayments(point.getAttribute('data-month-key'));
+  };
+  svg.onkeydown=event=>{
+    if(event.key!=='Enter'&&event.key!==' ') return;
+    const point=event.target.closest&&event.target.closest('[data-month-key]');
+    if(point){event.preventDefault();toggleMonthlyPayments(point.getAttribute('data-month-key'));}
+  };
   if(labelsEl){
-    labelsEl.innerHTML = monthLabels.map(l=>`<span>${l}</span>`).join('');
+    labelsEl.innerHTML = monthKeys.map((key,index)=>
+      `<button type="button" class="rep-month-btn${selectedRevenueMonth===key?' active':''}" data-month-key="${key}" aria-pressed="${selectedRevenueMonth===key}" title="${monthNames[index]} · ${rupee(vals[index])} received">${monthLabels[index]}</button>`
+    ).join('');
+    labelsEl.style.width=chartWidth;
+    labelsEl.style.minWidth=monthKeys.length<=6?'0':`${w}px`;
+    labelsEl.onclick=event=>{
+      const button=event.target.closest&&event.target.closest('.rep-month-btn');
+      if(button) toggleMonthlyPayments(button.getAttribute('data-month-key'));
+    };
   }
+  if(selectedRevenueMonth) renderMonthlyPayments(selectedRevenueMonth);
+}
+function toggleMonthlyPayments(monthKey){
+  selectedRevenueMonth = selectedRevenueMonth===monthKey ? null : monthKey;
+  const labelsEl = document.getElementById('rep-chart-labels');
+  if(labelsEl) labelsEl.querySelectorAll('.rep-month-btn').forEach(btn=>{
+    const active = btn.getAttribute('data-month-key')===selectedRevenueMonth && !!selectedRevenueMonth;
+    btn.classList.toggle('active',active);
+    btn.setAttribute('aria-pressed',String(active));
+  });
+  const detailsEl = document.getElementById('rep-month-payments');
+  if(!selectedRevenueMonth){
+    detailsEl.style.display='none';
+    detailsEl.innerHTML='';
+    return;
+  }
+  renderMonthlyPayments(selectedRevenueMonth);
+}
+function renderMonthlyPayments(monthKey){
+  const detailsEl = document.getElementById('rep-month-payments');
+  if(!detailsEl) return;
+  const [year,month] = monthKey.split('-').map(Number);
+  const label = new Date(year,month-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+  const monthPayments = payments
+    .filter(p=>p.date && p.date.slice(0,7)===monthKey)
+    .sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const total = monthPayments.reduce((sum,p)=>sum+Number(p.amount||0),0);
+  const escapeText=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  detailsEl.style.display='block';
+  detailsEl.onclick=event=>{
+    const closeButton=event.target.closest&&event.target.closest('[data-close-month]');
+    if(closeButton) toggleMonthlyPayments(selectedRevenueMonth);
+  };
+  detailsEl.innerHTML = `
+    <div style="border-top:1px solid var(--line);padding-top:11px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:9px;">
+        <div><div style="font-size:13px;font-weight:800;">${label} payments</div><div class="muted" style="font-size:11px;">${monthPayments.length} payment(s) · ${rupee(total)} total</div></div>
+        <button class="link" type="button" data-close-month>Close</button>
+      </div>
+      ${monthPayments.map(p=>{
+        const clientName=(clientById(p.clientId)||{}).name||'Client';
+        const meta=[fmtDate(p.date),p.mode,p.invoiceId].filter(Boolean).map(escapeText).join(' · ');
+        return `<div class="listitem"><div><div style="font-size:13px;font-weight:700;">${escapeText(clientName)}</div><div class="muted" style="font-size:11px;">${meta}</div></div><div style="font-size:13px;font-weight:800;color:var(--green);">${rupee(p.amount)}</div></div>`;
+      }).join('') || `<div class="muted" style="font-size:12px;padding:12px 2px;">No payments recorded in this month.</div>`}
+    </div>
+  `;
 }
 // Revenue for an arbitrary from/to date range, picked in the Reports screen.
 // "Billed" = invoice value for invoices dated in the range (excluding
@@ -4476,7 +4844,6 @@ function renderBusinessSettings(){
   document.getElementById('biz-prefix').value = business.prefix;
   document.getElementById('biz-nextno').value = business.nextNo;
   document.getElementById('biz-tax').value = business.tax;
-  document.getElementById('biz-currency').value = business.currency;
   document.getElementById('biz-terms').value = business.terms;
   document.getElementById('biz-template').value = business.template;
   document.getElementById('biz-theme-color').value = business.themeColor || '#C0392B';
@@ -4629,8 +4996,7 @@ function saveBusiness(){
   business.prefix = document.getElementById('biz-prefix').value.trim() || business.prefix;
   business.nextNo = Number(document.getElementById('biz-nextno').value||business.nextNo);
   business.tax = Number(document.getElementById('biz-tax').value||0);
-  business.currency = document.getElementById('biz-currency').value;
-  business.terms = document.getElementById('biz-terms').value;
+  business.terms = document.getElementById('biz-terms').value.trim();
   business.template = document.getElementById('biz-template').value;
   business.themeColor = document.getElementById('biz-theme-color').value || business.themeColor;
   saveState();
@@ -4830,11 +5196,17 @@ async function finishBoot(){
     // real data lands. First-ever login on a device has no cache yet, so
     // it still waits on the network as before.
     if(loadCachedData(currentAuth.id)){
-      fetchAllData().then(refreshVisibleScreen).catch(()=>{});
+      fetchAllData().then(()=>{
+        const activeEl = document.querySelector('.screen.active');
+        const activeName = activeEl && activeEl.id.replace('screen-','');
+        const REFRESHABLE = ['home','invoices','clients','payments','reports','history','client-detail','invoice-detail'];
+        if(getAuth() && activeName && REFRESHABLE.includes(activeName)){
+          goto(activeName, { fromPopstate:true });
+        }
+      }).catch(()=>{});
     } else {
       await fetchAllData();
     }
-    subscribeToLiveUpdates();
   }
 
   // A direct invoice link (from Share/WhatsApp/Email) is meant to be
@@ -4893,6 +5265,8 @@ window.addEventListener('beforeunload', ()=>{ saveState(); });
    ============================================================ */
 let registerPhoneVerified = false;
 let registerPhoneVerifiedE164 = '';
+let registerEmailVerified = false;
+let registerEmailVerifiedFor = '';
 
 function syncRegisterPhoneUI(){
   const input = document.getElementById('reg-phone');
@@ -4910,6 +5284,33 @@ function syncRegisterPhoneUI(){
   status.innerHTML = registerPhoneVerified
     ? '<span class="wa-otp-badge">✓ WhatsApp number verified</span>'
     : 'Verify this number with a 6-digit WhatsApp OTP.';
+  // Email can only be verified once a session exists, i.e. after phone
+  // verification succeeds, so keep the email button's enabled state in
+  // sync with phone status too.
+  syncRegisterEmailUI();
+}
+
+// Email verification uses Supabase's email_change OTP flow, which requires
+// an already-signed-in session — so it can only run after phone
+// verification has created one. It cannot run in parallel with phone
+// verification, only after it.
+function syncRegisterEmailUI(){
+  const input = document.getElementById('reg-email');
+  const btn = document.getElementById('reg-email-verify-btn');
+  const status = document.getElementById('reg-email-status');
+  if(!input || !btn || !status) return;
+  const email = input.value.trim().toLowerCase();
+  if(registerEmailVerified && email !== registerEmailVerifiedFor){
+    registerEmailVerified = false;
+    registerEmailVerifiedFor = '';
+  }
+  btn.disabled = !registerPhoneVerified || !EMAIL_RE.test(email) || registerEmailVerified;
+  btn.textContent = registerEmailVerified ? 'Verified ✓' : 'Verify';
+  btn.classList.toggle('verified', registerEmailVerified);
+  status.classList.toggle('verified', registerEmailVerified);
+  status.innerHTML = registerEmailVerified
+    ? '<span class="wa-otp-badge">✓ Email verified</span>'
+    : (registerPhoneVerified ? 'Verify this email with a 6-digit code.' : 'Verify your WhatsApp number first.');
 }
 
 // Updates the helper note under the login field as the user types, so it's
@@ -4998,6 +5399,25 @@ async function startRegisterPhoneVerification(){
   const phone = toE164(phoneRaw);
   setBtnBusy('reg-phone-verify-btn',true,'Sending…');
   try{
+    // Supabase Auth already stops a second account on the same WhatsApp
+    // number (phone is the auth identity for this flow), but email is
+    // just plain profile data here — nothing stopped the same email being
+    // reused across many different phone numbers, so check for it here.
+    const {data:existingByEmail, error:dupError} = await sb
+      .from('profiles')
+      .select('id')
+      .ilike('email', email)
+      .maybeSingle();
+    if(dupError){
+      showAuthError('reg-error', dupError.message || 'Could not verify the email. Please try again.');
+      return;
+    }
+    if(existingByEmail){
+      showAuthError('reg-error',
+        'This email is already registered. <button class="link-inline" onclick="goto(\'login\')">Log in instead</button>');
+      return;
+    }
+
     const {error} = await sb.auth.signInWithOtp({
       phone,
       options:{
@@ -5008,8 +5428,8 @@ async function startRegisterPhoneVerification(){
     });
     if(error){
       showAuthError('reg-error',
-        /already|registered|exists/i.test(error.message||'')
-          ? 'This WhatsApp number is already registered. <button class="link-inline" onclick="goto(\'login\')">Log in instead</button>'
+        /already|registered|exists|duplicate key|unique constraint/i.test(error.message||'')
+          ? 'This WhatsApp number or email is already registered. <button class="link-inline" onclick="goto(\'login\')">Log in instead</button>'
           : (error.message || 'Could not send WhatsApp OTP. Please try again.'));
       return;
     }
@@ -5022,6 +5442,64 @@ async function startRegisterPhoneVerification(){
   }finally{
     setBtnBusy('reg-phone-verify-btn',false);
     syncRegisterPhoneUI();
+  }
+}
+
+async function startRegisterEmailVerification(){
+  hideAuthError('reg-error');
+  if(!registerPhoneVerified){
+    showAuthError('reg-error','Please verify your WhatsApp number first.');
+    return;
+  }
+  const email = document.getElementById('reg-email').value.trim().toLowerCase();
+  if(!EMAIL_RE.test(email)){
+    showAuthError('reg-error','Please enter a valid email address.');
+    return;
+  }
+
+  setBtnBusy('reg-email-verify-btn',true,'Sending…');
+  try{
+    const {data:existingByEmail, error:dupError} = await sb
+      .from('profiles')
+      .select('id')
+      .ilike('email', email)
+      .maybeSingle();
+    if(dupError){
+      showAuthError('reg-error', dupError.message || 'Could not verify the email. Please try again.');
+      return;
+    }
+    if(existingByEmail){
+      showAuthError('reg-error',
+        'This email is already registered. <button class="link-inline" onclick="goto(\'login\')">Log in instead</button>');
+      return;
+    }
+
+    // Requires an active session, which phone verification just created.
+    // Sends a 6-digit code IF the "Change Email Address" template in the
+    // Supabase dashboard includes {{ .Token }} — otherwise this sends a
+    // clickable link instead, and the code box below will have nothing to
+    // check against.
+    const {error} = await sb.auth.updateUser({email});
+    if(error){
+      showAuthError('reg-error',
+        /already|registered|exists|duplicate key|unique constraint/i.test(error.message||'')
+          ? 'This email is already registered. <button class="link-inline" onclick="goto(\'login\')">Log in instead</button>'
+          : (error.message || 'Could not send the email code. Please try again.'));
+      return;
+    }
+    otpContext = {
+      purpose:'register-email-change',
+      email,
+      pendingProfile:{
+        name: document.getElementById('reg-name').value.trim(),
+        designation: document.getElementById('reg-designation').value.trim(),
+        phone: document.getElementById('reg-phone').value.trim()
+      }
+    };
+    goto('otp');
+  }finally{
+    setBtnBusy('reg-email-verify-btn',false);
+    syncRegisterEmailUI();
   }
 }
 
@@ -5044,6 +5522,10 @@ async function completeRegistration(){
     showAuthError('reg-error','Please enter a valid email address.');
     return;
   }
+  if(!registerEmailVerified || registerEmailVerifiedFor !== email){
+    showAuthError('reg-error','Please verify your email address first.');
+    return;
+  }
 
   setBtnBusy('register-btn',true,'Creating…');
   try{
@@ -5051,19 +5533,25 @@ async function completeRegistration(){
     if(!session){
       showAuthError('reg-error','Your verification session expired. Please verify the number again.');
       registerPhoneVerified=false;
+      registerEmailVerified=false;
       syncRegisterPhoneUI();
       return;
     }
 
     const pending = {name,designation,phone,email};
-    await sb.from('profiles').upsert({
+    const {error:upsertError} = await sb.from('profiles').upsert({
       id:session.user.id,
       email,
       name,
       designation,
       phone,
-      phone_verified:true
+      phone_verified:true,
+      email_verified:true
     },{onConflict:'id'});
+    if(upsertError){
+      showAuthError('reg-error', upsertError.message || 'Could not save your profile. Please try again.');
+      return;
+    }
 
     await refreshAuthFromSession();
     if(!currentAuth){
@@ -5072,11 +5560,12 @@ async function completeRegistration(){
     }
 
     await fetchAllData();
-    subscribeToLiveUpdates();
     paintStaticChrome();
     otpContext=null;
     registerPhoneVerified=false;
     registerPhoneVerifiedE164='';
+    registerEmailVerified=false;
+    registerEmailVerifiedFor='';
     history.replaceState({screen:currentAuth.role==='admin'?'admin':'home'},'', '#/'+(currentAuth.role==='admin'?'admin':'home'));
     goto(currentAuth.role==='admin'?'admin':'home',{fromPopstate:true});
   }catch(e){
@@ -5091,11 +5580,12 @@ async function completeRegistration(){
 function renderOtpScreen(){
   if(!otpContext){ goto('login'); return; }
   hideAuthError('otp-error');
-  const isEmail = otpContext.purpose==='login-email';
-  const isRegister = otpContext.purpose==='register-phone';
+  const isEmail = otpContext.purpose==='login-email' || otpContext.purpose==='register-email-change';
+  const isRegister = otpContext.purpose==='register-phone' || otpContext.purpose==='register-email-change';
 
   if(isEmail){
-    document.getElementById('otp-title').textContent = 'Enter login code';
+    document.getElementById('otp-title').textContent =
+      otpContext.purpose==='register-email-change' ? 'Verify your email' : 'Enter login code';
     document.getElementById('otp-subtitle').innerHTML =
       'Enter the 6-digit code sent to <span style="color:var(--ink);font-weight:700;">'+otpContext.email+'</span>';
     document.getElementById('otp-devnote').textContent = '';
@@ -5115,7 +5605,7 @@ function renderOtpScreen(){
   const switchBtn=document.getElementById('otp-switch-btn');
   if(switchBtn){
     switchBtn.textContent = isRegister ? 'Back to registration' : (isEmail ? 'Use a different email' : 'Use a different number');
-    switchBtn.onclick=()=>goto(isRegister?'register':'login');
+    switchBtn.onclick=()=>{ if(isRegister) otpContext=null; goto(isRegister?'register':'login'); };
   }
 }
 
@@ -5139,6 +5629,8 @@ async function doResendOtp(){
       email:otpContext.email,
       options:{shouldCreateUser:false}
     }));
+  }else if(otpContext.purpose==='register-email-change'){
+    ({error}=await sb.auth.updateUser({email:otpContext.email}));
   }
   setBtnBusy('otp-resend-btn',false);
   if(error){
@@ -5165,7 +5657,9 @@ async function doVerifyOtp(){
   try{
     const verifyArgs = (otpContext.purpose==='login-email')
       ? {email:otpContext.email, token:code, type:'email'}
-      : {phone:otpContext.phone, token:code, type:'sms'};
+      : (otpContext.purpose==='register-email-change')
+        ? {email:otpContext.email, token:code, type:'email_change'}
+        : {phone:otpContext.phone, token:code, type:'sms'};
     const {data,error}=await sb.auth.verifyOtp(verifyArgs);
     if(error){
       showAuthError('otp-error',/expired/i.test(error.message||'')
@@ -5174,18 +5668,56 @@ async function doVerifyOtp(){
       return;
     }
 
+    if(otpContext.purpose==='register-email-change'){
+      const p = otpContext.pendingProfile || {};
+      const session = (await sb.auth.getSession()).data.session;
+      if(!session){
+        showAuthError('otp-error','Your verification session expired. Please start registration again.');
+        otpContext=null;
+        goto('register');
+        return;
+      }
+
+      const {error:upsertError} = await sb.from('profiles').upsert({
+        id:session.user.id,
+        email:otpContext.email,
+        name:p.name,
+        designation:p.designation,
+        phone:p.phone,
+        phone_verified:true,
+        email_verified:true
+      },{onConflict:'id'});
+      if(upsertError){
+        showAuthError('otp-error', upsertError.message || 'Could not save your profile. Please try again.');
+        return;
+      }
+
+      clearInterval(otpResendTimer);
+      otpContext=null;
+      registerPhoneVerified=false;
+      registerPhoneVerifiedE164='';
+      registerEmailVerified=false;
+      registerEmailVerifiedFor='';
+
+      await refreshAuthFromSession();
+      if(!currentAuth){
+        showAuthError('otp-error',accountSuspended?'Your account has been suspended. Please contact support.':'Could not load your account. Please try again.');
+        return;
+      }
+      await fetchAllData();
+      paintStaticChrome();
+      const target=currentAuth.role==='admin'?'admin':'home';
+      history.replaceState({screen:target},'', '#/'+target);
+      showToast('Account created');
+      goto(target,{fromPopstate:true});
+      return;
+    }
+
     if(otpContext.purpose==='register-phone'){
       const p=otpContext.pendingProfile;
-      if(data && data.session){
-        await sb.from('profiles').upsert({
-          id:data.session.user.id,
-          email:p.email,
-          name:p.name,
-          designation:p.designation,
-          phone:p.phone,
-          phone_verified:true
-        },{onConflict:'id'});
-      }
+      // Note: verifying the WhatsApp OTP does NOT save a profile row anymore.
+      // The profile is only written in completeRegistration(), when the
+      // user actually taps "Create Account".
       registerPhoneVerified=true;
       registerPhoneVerifiedE164=otpContext.phone;
       clearInterval(otpResendTimer);
@@ -5209,7 +5741,6 @@ async function doVerifyOtp(){
     clearInterval(otpResendTimer);
     otpContext=null;
     await fetchAllData();
-    subscribeToLiveUpdates();
     paintStaticChrome();
     const target=currentAuth.role==='admin'?'admin':'home';
     history.replaceState({screen:target},'', '#/'+target);
