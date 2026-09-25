@@ -4575,6 +4575,26 @@ async function savePayment(btn){
       }
     }
     logActivity('Payment received', rupee(amount)+' from '+(clientById(clientId)||{}).name, 'paid', 'payment');
+    // Notify the business owner over WhatsApp that a payment came in.
+    // Fire-and-forget: the bot call can be slow, and a failed/late WhatsApp
+    // send should never block the payment screen or show an error to the user.
+    // Handled by a small Railway service (same project as stampbook-wa-bot),
+    // not a Supabase Edge Function.
+    (async () => {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        await fetch('https://notify-payment-received-production.up.railway.app', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + (session?.access_token || '')
+          },
+          body: JSON.stringify({ payment_id: data.id })
+        });
+      } catch (err) {
+        console.error('payment-received notify failed:', err);
+      }
+    })();
     showToast('Payment recorded');
     goto('payments');
   } finally {
