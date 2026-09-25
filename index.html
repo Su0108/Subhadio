@@ -2787,23 +2787,29 @@ function renderAdminNoticesList(){
       </div>
     </div>`;
   }).join('');
-  // Isolate each notice's raw HTML in a Shadow DOM so a pasted <style>
-  // block or "body {...}" rule can't leak out and break the admin panel
-  // itself (same fix as on the public notices.html page).
+  // Load each notice's raw HTML into its own <iframe srcdoc> so a pasted
+  // <style> block or "body {...}" rule can't leak out and break the admin
+  // panel itself (same fix as on the public notices.html page), AND so a
+  // pasted <script> (e.g. a countdown timer) actually runs with a working
+  // document.getElementById — a Shadow DOM would run the script but
+  // document.getElementById can't see into a shadow tree, so countdowns
+  // silently never updated there.
   adminNoticesCache.forEach((n,i)=>{
     const host = el.querySelector(`[data-notice-preview="${i}"]`);
     if(!host) return;
-    const shadow = host.attachShadow({ mode:'open' });
-    shadow.innerHTML = n.body_html;
-    // innerHTML never executes <script> tags (Shadow DOM or not) —
-    // rebuild each one as a real script element so pasted countdowns /
-    // other inline scripts in a notice actually run in the preview too.
-    shadow.querySelectorAll('script').forEach(oldScript=>{
-      const newScript = document.createElement('script');
-      for(const attr of oldScript.attributes) newScript.setAttribute(attr.name, attr.value);
-      newScript.textContent = oldScript.textContent;
-      oldScript.replaceWith(newScript);
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('sandbox','allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+    iframe.style.cssText = 'width:100%;border:0;display:block;overflow:hidden;';
+    iframe.srcdoc = n.body_html;
+    iframe.addEventListener('load', ()=>{
+      try{
+        const doc = iframe.contentDocument;
+        const resize = ()=>{ iframe.style.height = doc.documentElement.scrollHeight + 'px'; };
+        resize();
+        new ResizeObserver(resize).observe(doc.documentElement);
+      }catch(e){ /* cross-origin edge case, ignore */ }
     });
+    host.replaceWith(iframe);
   });
 }
 function editAdminNotice(id){

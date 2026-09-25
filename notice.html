@@ -84,11 +84,14 @@ async function loadNotices(){
   }
   empty.style.display = 'none';
   // Build the cards first (date label + an empty host div per notice),
-  // then attach a Shadow DOM to each host and inject the notice's raw
-  // HTML *inside* it. A shadow root fully isolates any <style> tags or
-  // "body {...}" rules the admin pastes in \u2014 without this, a full
-  // HTML template with its own <style> block would leak out and hijack
-  // the whole page's layout (which is why the title was jumping around).
+  // then load each notice's raw HTML into its own <iframe srcdoc>.
+  // An iframe gives each notice a completely separate document: any
+  // <style>/"body {...}" rules the admin pastes can't leak out and
+  // hijack this page's layout, AND unlike a Shadow DOM, a pasted
+  // <script> (e.g. a countdown timer) runs normally with its own
+  // working document.getElementById \u2014 Shadow DOM would run the
+  // script but document.getElementById can't see into a shadow tree,
+  // so countdowns silently never updated.
   list.innerHTML = data.map((n,i)=>{
     const d = new Date(n.created_at);
     const dstr = String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
@@ -99,17 +102,21 @@ async function loadNotices(){
   }).join('');
   data.forEach((n,i)=>{
     const host = list.querySelector(`[data-notice-host="${i}"]`);
-    const shadow = host.attachShadow({ mode:'open' });
-    shadow.innerHTML = n.body_html;
-    // innerHTML never executes <script> tags (Shadow DOM or not) —
-    // rebuild each one as a real script element so pasted countdowns /
-    // other inline scripts in a notice actually run.
-    shadow.querySelectorAll('script').forEach(oldScript=>{
-      const newScript = document.createElement('script');
-      for(const attr of oldScript.attributes) newScript.setAttribute(attr.name, attr.value);
-      newScript.textContent = oldScript.textContent;
-      oldScript.replaceWith(newScript);
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('sandbox','allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+    iframe.style.cssText = 'width:100%;border:0;display:block;overflow:hidden;';
+    iframe.srcdoc = n.body_html;
+    iframe.addEventListener('load', ()=>{
+      try{
+        const doc = iframe.contentDocument;
+        const resize = ()=>{ iframe.style.height = doc.documentElement.scrollHeight + 'px'; };
+        resize();
+        // Content like a countdown can change size (e.g. text reflow);
+        // keep the iframe's height in sync as it does.
+        new ResizeObserver(resize).observe(doc.documentElement);
+      }catch(e){ /* cross-origin edge case, ignore */ }
     });
+    host.replaceWith(iframe);
   });
 }
 </script>
