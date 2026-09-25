@@ -72,6 +72,11 @@
   h1,h2,h3{font-family:'Manrope',sans-serif;}
   #app{position:fixed; inset:0; overflow:hidden;}
   .screen{position:fixed; inset:0; top:0; bottom:0; overflow-y:auto; padding-bottom:104px; display:none; -webkit-overflow-scrolling:touch;}
+  /* Pull-to-refresh indicator. Negative margin keeps it out of layout
+     flow until a touchmove handler translates it down into view. */
+  .ptr-indicator{height:50px; margin-top:-50px; display:flex; align-items:center; justify-content:center; color:var(--red); font-size:18px; opacity:0; pointer-events:none; will-change:transform,opacity;}
+  .ptr-indicator.spinning i{animation:ptr-spin .7s linear infinite;}
+  @keyframes ptr-spin{to{transform:rotate(360deg);}}
   .screen.active{display:block;}
   .screen::-webkit-scrollbar{width:8px;}
   .screen::-webkit-scrollbar-thumb{background:#E5DED8; border-radius:8px;}
@@ -183,6 +188,12 @@
   .auth-error{background:var(--red-50); border:1px solid var(--red-100); color:var(--red); font-size:12.5px; border-radius:10px; padding:10px 12px; margin-bottom:14px; display:none; line-height:1.5;}
   .auth-error .link-inline{display:inline; padding:0; background:none; border:none; color:var(--red); font-weight:800; text-decoration:underline; cursor:pointer; font-family:inherit; font-size:inherit;}
   .switch-row{text-align:center; font-size:13px; color:var(--muted); margin-top:18px;}
+  .login-support{margin-top:28px;}
+  .login-support-title{display:flex; align-items:center; justify-content:center; gap:6px; font-size:12px; font-weight:700; color:var(--muted); cursor:pointer; padding:6px;}
+  .login-support-title .icon-chev{transition:transform .2s ease;}
+  .login-support-title.open .icon-chev{transform:rotate(90deg);}
+  .login-support-options{margin-top:6px;}
+  .login-support .menurow{padding:10px 12px;}
   .switch-row button{background:none; border:none; color:var(--red); font-weight:800; cursor:pointer; font-family:inherit; font-size:inherit; padding:0;}
   .otp-boxes{display:flex; gap:9px; justify-content:center; margin:6px 0 4px;}
   .otp-boxes input{width:44px; height:52px; text-align:center; font-size:20px; font-weight:800; border:1.5px solid var(--line); border-radius:12px; background:#FDFCFB; color:var(--ink); font-family:inherit;}
@@ -622,6 +633,22 @@
       <button class="btn" id="login-btn" onclick="doSendLoginOtp()">Send OTP</button>
       <div class="login-note" id="login-note">A 6-digit OTP will be sent to your WhatsApp number or email.</div>
       <div class="switch-row">New here? <button onclick="goto('register')">Create an account</button></div>
+      <div class="login-support">
+        <div class="login-support-title" id="login-support-toggle" onclick="toggleLoginSupport()">
+          <span>Need Help? Contact</span><span class="muted" id="login-support-chev0"></span>
+        </div>
+        <div class="login-support-options" id="login-support-options" style="display:none;">
+          <a class="menurow" href="mailto:stampbook03@gmail.com" style="text-decoration:none;">
+            <span class="l" id="login-support-email"></span><span class="muted" id="login-support-chev1"></span>
+          </a>
+          <a class="menurow" href="https://wa.me/919083787933" target="_blank" rel="noopener" style="text-decoration:none;">
+            <span class="l" id="login-support-whatsapp"></span><span class="muted" id="login-support-chev2"></span>
+          </a>
+          <a class="menurow" href="tel:+919083787933" style="text-decoration:none;">
+            <span class="l" id="login-support-call"></span><span class="muted" id="login-support-chev3"></span>
+          </a>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2032,6 +2059,13 @@ function clientStats(id){
 }
 
 // ---------------- static label / icon injection ----------------
+function toggleLoginSupport(){
+  const opts = document.getElementById('login-support-options');
+  const title = document.getElementById('login-support-toggle');
+  const open = opts.style.display === 'none';
+  opts.style.display = open ? 'block' : 'none';
+  title.classList.toggle('open', open);
+}
 function paintStaticChrome(){
   renderAdminMainTabs();
   document.getElementById('splash-full-img').src = SPLASH_IMG_B64;
@@ -2048,6 +2082,11 @@ function paintStaticChrome(){
   document.getElementById('aud-back').innerHTML = ic('back',18);
   document.getElementById('admin-searchbar').innerHTML = ic('search',16)+'<input id="admin-search-input" placeholder="Search by name, email or phone..." oninput="renderAdminUserList()">';
   document.getElementById('home-bell-wrap').innerHTML = ic('bell',18) + '<span class="dot" id="home-bell-dot" style="display:none;"></span>';
+  document.getElementById('login-support-chev0').innerHTML = ic('chevron',14,'icon-chev');
+  document.getElementById('login-support-email').innerHTML = ic('mail',17)+' stampbook03@gmail.com';
+  document.getElementById('login-support-whatsapp').innerHTML = ic('whatsapp',17)+' WhatsApp: +91 90837 87933';
+  document.getElementById('login-support-call').innerHTML = ic('phone',17)+' Call: +91 90837 87933';
+  ['login-support-chev1','login-support-chev2','login-support-chev3'].forEach(id=>document.getElementById(id).innerHTML=ic('chevron',16));
   document.getElementById('home-viewall').innerHTML = 'View All ' + ic('chevron',14);
   document.getElementById('inv-search-btn').innerHTML = ic('search',18);
   document.getElementById('inv-clients-btn').innerHTML = ic('users',18);
@@ -5793,6 +5832,89 @@ async function doVerifyOtp(){
     setBtnBusy('otp-verify-btn',false);
   }
 }
+
+/* ---------------------------------------------------------------------
+   PULL TO REFRESH
+   The browser's own pull-to-refresh gesture only fires when the *document*
+   itself scrolls to the top and gets dragged further. Here `body` and
+   `#app` are `position:fixed; overflow:hidden` and each `.screen` does its
+   own internal `overflow-y:auto` scrolling, so the outer document never
+   scrolls at all — the native gesture has nothing to hook into and never
+   engages. This reimplements it manually with touch events on whichever
+   `.screen` is active, refreshing data the same way finishBoot() does.
+--------------------------------------------------------------------- */
+(function(){
+  const REFRESH_SCREENS=['home','invoices','clients','payments','reports','history','client-detail','invoice-detail'];
+  const THRESHOLD=70, MAX_PULL=110;
+  let startY=0, pulling=false, screenEl=null, indicator=null, pullDist=0;
+
+  function ensureIndicator(screen){
+    let el=screen.querySelector(':scope > .ptr-indicator');
+    if(!el){
+      el=document.createElement('div');
+      el.className='ptr-indicator';
+      el.innerHTML='<i class="fa-solid fa-arrow-rotate-right"></i>';
+      screen.insertBefore(el, screen.firstChild);
+    }
+    return el;
+  }
+  function resetIndicator(){
+    if(indicator){
+      indicator.style.transition='transform .25s ease, opacity .25s ease';
+      indicator.style.transform='translateY(0)';
+      indicator.style.opacity='0';
+      indicator.classList.remove('spinning');
+      setTimeout(()=>{ if(indicator) indicator.style.transition=''; },250);
+    }
+    screenEl=null; indicator=null; pulling=false; pullDist=0;
+  }
+
+  document.addEventListener('touchstart',(e)=>{
+    if(e.touches.length!==1) return;
+    const screen=e.target.closest('.screen.active');
+    if(!screen) return;
+    const name=screen.id.replace('screen-','');
+    if(!getAuth() || !REFRESH_SCREENS.includes(name)) return;
+    if(screen.scrollTop>0) return;
+    screenEl=screen;
+    startY=e.touches[0].clientY;
+    pulling=true;
+    pullDist=0;
+    indicator=ensureIndicator(screen);
+  },{passive:true});
+
+  document.addEventListener('touchmove',(e)=>{
+    if(!pulling || !screenEl) return;
+    if(screenEl.scrollTop>0){ resetIndicator(); return; }
+    const dy=e.touches[0].clientY-startY;
+    if(dy<=0) return;
+    e.preventDefault();
+    pullDist=Math.min(dy*0.5, MAX_PULL);
+    indicator.style.transform=`translateY(${pullDist}px) rotate(${pullDist*3}deg)`;
+    indicator.style.opacity=String(Math.min(pullDist/THRESHOLD,1));
+  },{passive:false});
+
+  document.addEventListener('touchend', async ()=>{
+    if(!pulling || !screenEl) return;
+    const dist=pullDist, screen=screenEl;
+    pulling=false;
+    if(dist>=THRESHOLD){
+      indicator.style.transform='translateY(50px) rotate(0deg)';
+      indicator.classList.add('spinning');
+      try{
+        await fetchAllData();
+        const activeEl=document.querySelector('.screen.active');
+        const activeName=activeEl && activeEl.id.replace('screen-','');
+        if(getAuth() && activeName && REFRESH_SCREENS.includes(activeName)){
+          goto(activeName, { fromPopstate:true });
+        }
+      }catch(e){}
+    }
+    resetIndicator();
+  },{passive:true});
+
+  document.addEventListener('touchcancel', resetIndicator, {passive:true});
+})();
 
 /* Register screen state is restored every time it is opened. */
 const _originalGoto = goto;
