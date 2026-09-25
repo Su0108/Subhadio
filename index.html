@@ -4297,14 +4297,6 @@ async function saveInvoice(stage, btn){
     if(!clientId || items.length===0){ alert('Please select a client and add at least one item.'); return; }
 
     showSaveWait('invoice', 'Saving invoice…');
-    let reservedNo;
-    try{
-      reservedNo = await reserveNextInvoiceNumber();
-    }catch(numErr){
-      alert(numErr.message || 'Could not generate an invoice number. Please try again.');
-      return;
-    }
-    const id = business.prefix + '-' + reservedNo;
     const discount = Number(document.getElementById('ci-discount').value||0);
     const charge = Number(document.getElementById('ci-charge').value||0);
     const chargeReason = document.getElementById('ci-charge-reason').value.trim();
@@ -4323,18 +4315,35 @@ async function saveInvoice(stage, btn){
     const date = document.getElementById('ci-date').value;
     const dueDate = document.getElementById('ci-duedate').value;
 
-    const { error:invErr } = await sb.from('invoices').insert({
-      id, user_id:currentAuth.id, client_id:clientId, stage: stage||'sent',
-      date, due_date:dueDate, discount, paid:0
-    });
-    if(invErr){
-      // The number was already reserved above (next_no moved past it), so a
-      // failed insert here — e.g. a network drop — leaves that number
-      // permanently skipped rather than reused. That's an intentional
-      // trade-off: skipping a number is harmless, silently reusing one
-      // (the old failure mode) is not.
-      alert('Could not save invoice: '+invErr.message);
-      return;
+    // Reserve a number and insert, retrying with a fresh number if the
+    // insert collides on invoices_pkey. This happens when "Next Invoice
+    // No." in Settings has been hand-edited (or reset) to a value that
+    // was already used by an earlier invoice: reserveNextInvoiceNumber()
+    // only guarantees the counter advances atomically, it can't know that
+    // a lower, already-consumed number is sitting in the invoices table.
+    // Any other insert failure (network drop, etc.) still surfaces to the
+    // user immediately and leaves that number skipped, as before.
+    let id, reservedNo;
+    for(let attempt=0; attempt<5; attempt++){
+      try{
+        reservedNo = await reserveNextInvoiceNumber();
+      }catch(numErr){
+        alert(numErr.message || 'Could not generate an invoice number. Please try again.');
+        return;
+      }
+      id = business.prefix + '-' + reservedNo;
+      const { error:invErr } = await sb.from('invoices').insert({
+        id, user_id:currentAuth.id, client_id:clientId, stage: stage||'sent',
+        date, due_date:dueDate, discount, paid:0
+      });
+      if(!invErr) break;
+      const isDupNo = invErr.code==='23505' || /duplicate key/i.test(invErr.message||'');
+      if(!isDupNo || attempt===4){
+        alert('Could not save invoice: '+invErr.message);
+        return;
+      }
+      // Number already used by an existing invoice — loop and reserve the
+      // next one instead of failing outright.
     }
     await sb.from('invoice_items').insert(items.map((it,idx)=>({
       invoice_id:id, user_id:currentAuth.id, name:it.name, qty:it.qty, price:it.price, position:idx
