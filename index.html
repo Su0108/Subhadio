@@ -1567,6 +1567,17 @@
   </div>
 </div>
 
+<!-- UPI CONFIRM OVERLAY — shown when the client returns to the tab after being sent to their UPI app for a direct (gateway-less) payment. There's no callback that tells us whether they actually paid, so we simply ask. -->
+<div class="modal-overlay" id="upi-confirm-overlay" style="z-index:60;">
+  <div class="sheet" style="text-align:center;">
+    <h3 style="margin-bottom:6px;">Did you complete the payment?</h3>
+    <div class="muted" style="font-size:13px;line-height:1.5;margin-bottom:16px;">We can't automatically confirm UPI payments — let us know so the business can check and update this invoice.</div>
+    <input type="hidden" id="upi-confirm-pending-id">
+    <button class="btn" style="margin-bottom:8px;" onclick="confirmUpiClaim()">Yes, I've paid</button>
+    <button class="btn line" onclick="dismissUpiConfirm()">Not yet</button>
+  </div>
+</div>
+
 <!-- SAVE WAIT OVERLAY — INVOICE (feed-in/settle/stamp animation, shown while an invoice saves) -->
 <div class="modal-overlay" id="savewait-invoice-overlay" style="z-index:60;">
   <div class="sheet">
@@ -2075,10 +2086,17 @@ async function loadPublicInvoice(id){
   publicInvoiceView = true;
   publicCashfreeEnabled = !!data.cashfree_enabled;
   publicActiveGateway = data.active_gateway || null;
+  publicUpiClaimedAt = data.upi_claimed_at || null;
   return true;
 }
 let publicCashfreeEnabled = false;
 let publicActiveGateway = null;
+// Set when the client has tapped "I've completed the payment" after a UPI
+// direct-pay redirect (see payViaUpi/confirmUpiClaim below). This never
+// marks the invoice paid on its own — it just lets the public invoice page
+// show "waiting for confirmation" instead of a bare Pay button, so the
+// client doesn't think their payment silently failed.
+let publicUpiClaimedAt = null;
 
 // Look up "the invoice/client/business currently on screen", resolving to
 // the publicly-shared data while a shared link is being viewed, and to the
@@ -3429,7 +3447,8 @@ function renderInvoiceDetail(){
     if(inv.stage==='draft'){
       actionsHtml = `<button class="btn" style="margin-top:14px;" onclick="markAsSent('${inv.id}')">${ic('send',15)} Send Invoice</button>`;
     } else if(inv.stage!=='cancelled' && inv.due>0){
-      actionsHtml = `<button class="btn" style="margin-top:14px;" onclick="prefillPayment('${inv.id}','${inv.clientId}')">${ic('wallet',15)} Add Payment</button>`;
+      actionsHtml = `<div id="upi-claim-banner"></div><button class="btn" style="margin-top:14px;" onclick="prefillPayment('${inv.id}','${inv.clientId}')">${ic('wallet',15)} Add Payment</button>`;
+      loadUpiClaimBanner(inv.id);
     }
     if(inv.stage!=='cancelled' && inv.status!=='Paid'){
       cancelHtml = `<button class="btn line" style="margin-top:10px;color:var(--red);" onclick="cancelInvoice('${inv.id}')">${ic('ban',15)} Cancel Invoice</button>`;
@@ -3439,7 +3458,15 @@ function renderInvoiceDetail(){
 
   let payHtml = '';
   if(publicInvoiceView && publicActiveGateway && inv.stage!=='cancelled' && inv.due>0){
-    payHtml = `<button class="btn" id="cf-pay-btn" style="margin-top:14px;" onclick="payWithGateway('${inv.id}', this)">${ic('wallet',15)} Pay ${rupee(inv.due)} Online</button>`;
+    if(publicActiveGateway === 'upi' && publicUpiClaimedAt){
+      payHtml = `<div class="card" style="margin-top:14px;background:var(--amber-50,#FFF7E8);border-color:var(--amber-200,#F5D68C);">
+        <div style="font-size:13px;font-weight:700;">${ic('bell',15)} Waiting for confirmation</div>
+        <div class="muted" style="font-size:12px;margin-top:4px;line-height:1.5;">You told us you paid ${rupee(inv.due)} on ${fmtDate(publicUpiClaimedAt)}. The business will verify and mark this invoice as paid shortly.</div>
+        <button class="btn line" style="margin-top:10px;font-size:12px;" onclick="resetUpiClaim('${inv.id}')">Didn't actually pay yet? Pay again</button>
+      </div>`;
+    } else {
+      payHtml = `<button class="btn" id="cf-pay-btn" style="margin-top:14px;" onclick="payWithGateway('${inv.id}', this)">${ic('wallet',15)} Pay ${rupee(inv.due)} Online</button>`;
+    }
   }
 
   document.getElementById('invoice-detail-body').innerHTML = `
@@ -3507,6 +3534,27 @@ async function shortenLink(longUrl){
 // buttons share 'saveInvoice' so tapping either one while the first save is
 // still in flight is ignored, not just repeat-taps on the same button.
 const submitLocks = new Set();
+// Owner-side nudge: if a client tapped "I've paid" after a UPI direct-pay
+// redirect (see confirmUpiClaim in the public view), show it here so the
+// business knows to check their bank/UPI app and use "Add Payment" — rather
+// than relying on the client to separately message them. Fetched async so
+// renderInvoiceDetail() itself can stay synchronous.
+async function loadUpiClaimBanner(invId){
+  const el = document.getElementById('upi-claim-banner');
+  if(!el) return;
+  try{
+    const { data, error } = await sb.from('upi_payment_claims')
+      .select('claimed_at').eq('invoice_id', invId)
+      .order('claimed_at', { ascending:false }).limit(1).maybeSingle();
+    if(error || !data) return;
+    const stillThere = document.getElementById('upi-claim-banner');
+    if(!stillThere) return; // user navigated away before this resolved
+    stillThere.innerHTML = `<div class="card" style="margin-top:14px;background:var(--amber-50,#FFF7E8);border-color:var(--amber-200,#F5D68C);">
+      <div style="font-size:13px;font-weight:700;">${ic('bell',15)} Client says they paid</div>
+      <div class="muted" style="font-size:12px;margin-top:4px;">Marked as paid via UPI on ${fmtDate(data.claimed_at)}. Verify it landed in your account, then use "Add Payment" below.</div>
+    </div>`;
+  }catch(e){ /* non-critical, leave banner empty */ }
+}
 function guardSubmit(key, btn){
   if(submitLocks.has(key)) return false;
   submitLocks.add(key);
@@ -4105,6 +4153,14 @@ function payWithGateway(invId, btn){
 // the UPI app confirming the transfer actually happened, this never touches
 // the invoice's payment status either way — the business marks it paid
 // themselves via "Add Payment" once the money has actually arrived.
+//
+// What this DOES do is close the gap where a client comes back from their
+// UPI app to a page that looks exactly like it did before they paid, and
+// assumes it failed: we watch for the tab regaining focus (their UPI app
+// closing/backgrounding) and ask them directly whether it went through. A
+// "yes" just records a claim (see confirmUpiClaim) for the business to see
+// and verify — it's a nudge, not a confirmation.
+let upiAwaitingReturn = null; // {invId} while we're watching for the client to come back
 function payViaUpi(invId, btn){
   const inv = computeInvoice(getDisplayInvoice(invId));
   const biz = publicBusinessData || business;
@@ -4115,7 +4171,51 @@ function payViaUpi(invId, btn){
     +'&am='+encodeURIComponent(inv.due)
     +'&cu=INR'
     +'&tn='+encodeURIComponent('Invoice '+invId);
+  upiAwaitingReturn = { invId };
+  showToast('Opening your UPI app…');
   window.location.href = upiUri;
+}
+// Fires once, the first time this tab regains focus after payViaUpi ran —
+// i.e. the client has come back from their UPI app (or the intent never
+// opened one, which the "Not yet" option below covers just as well).
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState !== 'visible') return;
+  if(!upiAwaitingReturn) return;
+  const { invId } = upiAwaitingReturn;
+  upiAwaitingReturn = null;
+  setTimeout(()=>{
+    document.getElementById('upi-confirm-pending-id').value = invId;
+    document.getElementById('upi-confirm-overlay').classList.add('active');
+  }, 400); // small delay so this doesn't flash while the app switch animation is still settling
+});
+function dismissUpiConfirm(){
+  document.getElementById('upi-confirm-overlay').classList.remove('active');
+}
+async function confirmUpiClaim(){
+  const invId = document.getElementById('upi-confirm-pending-id').value;
+  dismissUpiConfirm();
+  try{
+    const res = await fetch(CF_FUNCTIONS_BASE + '/notify-upi-claim', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ invoice_id: invId })
+    });
+    const result = await res.json();
+    if(!res.ok || result.error){
+      showToast(result.error || 'Could not reach the business — try again');
+      return;
+    }
+    await loadPublicInvoice(invId);
+    renderInvoiceDetail();
+    showToast('Thanks — the business has been notified to verify your payment');
+  }catch(e){
+    showToast('Could not reach the business — try again');
+  }
+}
+// Lets a client undo a claim they made by mistake (e.g. tapped "Yes" but the
+// UPI app actually failed) so the Pay button comes back.
+async function resetUpiClaim(invId){
+  publicUpiClaimedAt = null;
+  renderInvoiceDetail();
 }
 
 // Lazily loads Razorpay's Checkout.js — only businesses that actually pick
