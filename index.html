@@ -3680,8 +3680,12 @@ const pdfRupee = (n) => 'Rs. ' + Math.round(Number(n||0)).toLocaleString('en-IN'
 function appBaseUrl(){
   return location.origin + location.pathname;
 }
+// Client-facing link (Share/WhatsApp/Email buttons on an invoice) — always
+// the no-login, read-only public view. Kept on its own '#/pay/' route so it
+// never collides with '#/invoice/<id>', which is the owner's own in-app
+// route (see finishBoot()) and stays editable/login-gated for them.
 function invoiceShareLink(invId){
-  return appBaseUrl() + '#/invoice/' + encodeURIComponent(invId);
+  return appBaseUrl() + '#/pay/' + encodeURIComponent(invId);
 }
 async function shortenLink(longUrl){
   // is.gd's public endpoint doesn't send CORS headers, so calling it
@@ -5621,18 +5625,31 @@ async function finishBoot(){
   // A direct invoice link (from Share/WhatsApp/Email) is meant to be
   // viewable by the client without an account, so it's resolved *before*
   // the "no session -> login" check below, not after it.
-  const invMatch = location.hash.match(/^#\/invoice\/(.+)$/);
-  const sharedId = invMatch ? decodeURIComponent(invMatch[1]) : null;
+  //
+  // Two separate hash routes carry an invoice id:
+  //  - '#/pay/<id>'     — the client-facing link (invoiceShareLink()).
+  //                       Always the no-login, read-only public view, no
+  //                       matter who happens to open it.
+  //  - '#/invoice/<id>' — the owner's own route (used to restore the
+  //                       invoice-detail screen on page reload, and the
+  //                       link sent to the owner in the UPI-claim
+  //                       WhatsApp notification). If the signed-in owner
+  //                       actually has this invoice, show their real,
+  //                       editable copy (with "Add Payment", etc). Only
+  //                       fall back to the public view when nobody is
+  //                       signed in, or this account doesn't have that
+  //                       invoice (e.g. someone else's link).
+  const payMatch = location.hash.match(/^#\/pay\/(.+)$/);
+  const invMatch = payMatch ? null : location.hash.match(/^#\/invoice\/(.+)$/);
+  const sharedId = payMatch ? decodeURIComponent(payMatch[1])
+    : invMatch ? decodeURIComponent(invMatch[1]) : null;
   if(sharedId){
-    // Always resolve a direct invoice link (#/invoice/<id>) through the
-    // public, read-only RPC — even when the person opening it happens to
-    // be logged in as the invoice's owner. Previously, a logged-in owner
-    // clicking their own share link would see the normal in-app editable
-    // invoice screen instead of the read-only client view, since their
-    // own copy of the invoice was already loaded into `invoices`. Sharing
-    // a link is only useful if it shows exactly what an unauthenticated
-    // client would see, so we no longer special-case "already logged in".
-    await loadPublicInvoice(sharedId);
+    const ownCopy = !payMatch && currentAuth && invoices.find(i=>i.id===sharedId);
+    if(ownCopy){
+      currentInvoiceId = sharedId;
+    } else {
+      await loadPublicInvoice(sharedId);
+    }
   }
 
   paintStaticChrome();
