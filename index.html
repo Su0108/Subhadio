@@ -851,6 +851,12 @@
       <div class="section-head" style="padding-top:14px;"><h2>Gateway Failure Rate</h2></div>
       <div class="px" id="admin-gateway-failures"><div class="empty">Loading\u2026</div></div>
     </div>
+
+    <div id="admin-tab-sessions" style="display:none;">
+      <div class="section-head" style="padding-top:14px;"><h2>Login Activity</h2></div>
+      <div class="muted" style="font-size:10.5px;padding:0 22px 8px;">"Online" means their last recorded action was a login \u2014 not a live connection check. Tap a user to see full history.</div>
+      <div class="px" id="admin-sessions-list"><div class="empty">Loading\u2026</div></div>
+    </div>
   </div>
 
   <!-- 1b. ADMIN USER DETAIL -->
@@ -1017,7 +1023,7 @@
 
   <!-- 8. CLIENT DETAILS -->
   <div class="screen" id="screen-client-detail">
-    <div class="topbar"><div class="backrow"><div class="iconbtn" onclick="goto('clients')" id="clientd-back"></div><h1>Client Details</h1></div><div class="iconbtn" onclick="deleteClient(currentClientId)" id="clientd-delete" style="color:var(--red);"></div></div>
+    <div class="topbar"><div class="backrow"><div class="iconbtn" onclick="goto('clients')" id="clientd-back"></div><h1>Client Details</h1></div><div style="display:flex;gap:8px;"><div class="iconbtn" onclick="openEditClient(currentClientId)" id="clientd-edit"></div><div class="iconbtn" onclick="deleteClient(currentClientId)" id="clientd-delete" style="color:var(--red);"></div></div></div>
     <div class="px" id="client-detail-body"></div>
   </div>
 
@@ -1845,6 +1851,7 @@ let payments = [];
 let selectedRevenueMonth = null;
 let expenses = [];
 let activity = [];
+let realtimeChannel = null;
 
 // =====================================================================
 // SUPABASE
@@ -1917,6 +1924,7 @@ async function refreshAuthFromSession(){
     // Suspended by an admin — sign the session out immediately rather than
     // letting them sit half-authenticated with no way to use the app.
     await sb.auth.signOut();
+    teardownRealtimeSync();
     currentAuth = null;
     accountSuspended = true;
     return null;
@@ -1929,6 +1937,22 @@ async function refreshAuthFromSession(){
   profile.email = prof.email || '';
   profile.phoneVerified = !!prof.phone_verified;
   return currentAuth;
+}
+
+// ---- login/logout event log (for Admin -> Sessions) ----
+// Written only at explicit auth moments (OTP-verified login, completed
+// registration, tapped Logout) — NOT on every silent session resume when
+// the app is reopened with a cached session, or "last login" would just
+// mean "last time they opened the tab". This can never throw into the
+// auth flow that calls it.
+// KNOWN LIMIT: there's no "logout" event if someone just closes the tab/app
+// or their session expires without tapping Logout — this is a log of
+// explicit actions, not a live connection/presence tracker. A user who
+// never taps Logout will keep showing as "Online" in the admin panel.
+async function logLoginEvent(kind){
+  if(!currentAuth) return;
+  try{ await sb.from('login_events').insert({ user_id: currentAuth.id, event: kind }); }
+  catch(e){ /* never block auth on this */ }
 }
 
 // ---- data mappers: db row (snake_case) <-> app object (camelCase) ----
@@ -2041,6 +2065,73 @@ async function fetchAllData(){
   activity = (actRows||[]).map(mapActivityRow);
 
   saveCachedData();
+  setupRealtimeSync();
+}
+
+// =====================================================================
+// REALTIME SYNC — payment status changes (e.g. a gateway webhook marking
+// an invoice paid, or a teammate recording a payment on another device)
+// land in Supabase without this tab doing anything. Without this, the
+// person would only see it after a manual pull-to-refresh. This opens one
+// Postgres-changes channel per signed-in user, scoped to their own rows
+// (same user_id the REST queries above already filter on), and patches
+// the in-memory invoices/payments arrays directly instead of refetching
+// everything, then re-renders the screen currently on view if it's one
+// that shows invoice/payment data.
+//
+// Requires Realtime replication to be turned on for the `invoices` and
+// `payments` tables in the Supabase dashboard (Database -> Replication).
+// RLS is respected the same way it is for normal queries, so no separate
+// policy is needed beyond what fetchAllData() already relies on.
+//
+// Known gap: invoice_items changes aren't subscribed to, so an invoice
+// INSERTed from another device shows with empty items until the next
+// full fetchAllData() (login, pull-to-refresh, etc). Status/paid amount
+// on invoices already in the list updates instantly either way.
+const REALTIME_REFRESHABLE = ['home','invoices','clients','payments','reports','history','client-detail','invoice-detail'];
+function refreshActiveScreenIfRelevant(){
+  const activeEl = document.querySelector('.screen.active');
+  const activeName = activeEl && activeEl.id.replace('screen-','');
+  if(getAuth() && activeName && REALTIME_REFRESHABLE.includes(activeName)){
+    goto(activeName, { fromPopstate:true });
+  }
+}
+function applyInvoiceRealtimeEvent(payload){
+  if(payload.eventType==='DELETE'){
+    invoices = invoices.filter(i=>i.id!==payload.old.id);
+  } else {
+    const row = payload.new;
+    const idx = invoices.findIndex(i=>i.id===row.id);
+    const existingItems = idx>-1 ? invoices[idx].items : [];
+    const mapped = mapInvoiceRow(row, existingItems);
+    if(idx>-1) invoices[idx] = mapped; else invoices.push(mapped);
+  }
+  saveCachedData();
+  refreshActiveScreenIfRelevant();
+}
+function applyPaymentRealtimeEvent(payload){
+  if(payload.eventType==='DELETE'){
+    payments = payments.filter(p=>p.id!==payload.old.id);
+  } else {
+    const row = payload.new;
+    const idx = payments.findIndex(p=>p.id===row.id);
+    const mapped = mapPaymentRow(row);
+    if(idx>-1) payments[idx] = mapped; else payments.unshift(mapped);
+  }
+  saveCachedData();
+  refreshActiveScreenIfRelevant();
+}
+function setupRealtimeSync(){
+  if(!currentAuth) return;
+  teardownRealtimeSync();
+  const uid = currentAuth.id;
+  realtimeChannel = sb.channel('stampbook-sync-'+uid)
+    .on('postgres_changes', { event:'*', schema:'public', table:'invoices', filter:'user_id=eq.'+uid }, applyInvoiceRealtimeEvent)
+    .on('postgres_changes', { event:'*', schema:'public', table:'payments', filter:'user_id=eq.'+uid }, applyPaymentRealtimeEvent)
+    .subscribe();
+}
+function teardownRealtimeSync(){
+  if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; }
 }
 
 // ---- load a single invoice for an unauthenticated visitor who opened a
@@ -2154,6 +2245,7 @@ const uid = () => Math.random().toString(36).slice(2,9);
 const rupee = (n) => '₹' + Math.round(Number(n||0)).toLocaleString('en-IN');
 const todayISO = () => new Date().toISOString().slice(0,10);
 const fmtDate = (iso) => { if(!iso) return ''; const d=new Date(iso); return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); };
+const fmtDateTime = (iso) => { if(!iso) return ''; const d=new Date(iso); return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + ', ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); };
 const clientById = (id) => clients.find(c=>c.id===id);
 
 function computeInvoice(inv){
@@ -2238,6 +2330,7 @@ function paintStaticChrome(){
   document.getElementById('clients-back').innerHTML = ic('back',18);
   document.getElementById('clients-add').innerHTML = ic('plus',18);
   document.getElementById('clientd-back').innerHTML = ic('back',18);
+  document.getElementById('clientd-edit').innerHTML = ic('edit',17);
   document.getElementById('clientd-delete').innerHTML = ic('trash',17);
   document.getElementById('addpay-back').innerHTML = ic('back',18);
   document.getElementById('addexp-back').innerHTML = ic('back',18);
@@ -2471,8 +2564,10 @@ function updateOtpResendUI(){
 }
 async function doLogout(){
   if(!confirm('Log out of StampBook?')) return;
+  await logLoginEvent('logout'); // must run before signOut() while auth.uid() is still valid
   if(currentAuth) clearCachedData(currentAuth.id);
   await sb.auth.signOut();
+  teardownRealtimeSync();
   currentAuth = null;
   publicInvoiceView = false;
   try{ localStorage.removeItem('stampbook_last_screen'); }catch(e){}
@@ -2492,6 +2587,7 @@ let editingNoticeId = null;
 let adminCrashCache = [];
 let adminChurnCache = [];
 let adminFailuresCache = [];
+let adminSessionsCache = [];
 let adminMainTab = 'gateway';
 
 // Scrollable chip bar at the top of the admin panel (same .filters/.chip
@@ -2509,6 +2605,7 @@ const ADMIN_MAIN_TABS = [
   ['crashes','Crashes', ()=> adminCrashCache.length],
   ['churn','Churn', ()=> adminChurnCache.filter(u=>u.invoice_count===0 || isStaleUser(u)).length],
   ['failures','Failures', null],
+  ['sessions','Sessions', ()=> adminSessionsCache.filter(u=>u.last_event==='login').length],
 ];
 function renderAdminMainTabs(){
   const el = document.getElementById('admin-main-tabs');
@@ -2581,6 +2678,7 @@ async function renderAdmin(){
   loadAdminFeatureUsage();
   loadAdminChurn();
   loadAdminGatewayFailures();
+  loadAdminSessions();
 }
 
 // Platform-wide "Monthly Revenue" chart — billed totals grouped by invoice
@@ -3151,6 +3249,48 @@ function renderAdminGatewayFailures(){
   }).join('');
 }
 
+// ---------------- Login activity / who's online (admin) ----------------
+// Backed by admin_get_login_status() (SECURITY DEFINER, admin-only — see
+// the migration SQL), which returns each user's most recent login_events
+// row. "Online" here means their last recorded action was a login with no
+// logout after it — it is NOT a live connection check. Someone who closes
+// the tab/app without tapping Logout will keep showing Online until they
+// next log in or out; there is no heartbeat/presence signal behind this.
+async function loadAdminSessions(){
+  const { data, error } = await sb.rpc('admin_get_login_status');
+  const el = document.getElementById('admin-sessions-list');
+  if(error){
+    if(el) el.innerHTML = `<div class="empty">Could not load login activity. ${error.message||''}</div>`;
+    return;
+  }
+  adminSessionsCache = data || [];
+  renderAdminSessions();
+  renderAdminMainTabs();
+}
+function renderAdminSessions(){
+  const el = document.getElementById('admin-sessions-list');
+  if(!el) return;
+  const rows = [...adminSessionsCache].sort((a,b)=>{
+    const ta = a.last_event_at ? new Date(a.last_event_at).getTime() : -1;
+    const tb = b.last_event_at ? new Date(b.last_event_at).getTime() : -1;
+    return tb - ta;
+  });
+  el.innerHTML = rows.map(u=>{
+    const online = u.last_event === 'login';
+    const never = !u.last_event;
+    const pillClass = never ? 'Draft' : (online ? 'Paid' : 'Overdue');
+    const pillText = never ? 'Never logged in' : (online ? 'Online' : 'Offline');
+    const whenText = never ? '' : `${online?'since':'logged out'} ${fmtDateTime(u.last_event_at)}`;
+    return `<div class="listitem" style="cursor:pointer; flex-direction:column; align-items:stretch;" onclick="openAdminUserDetail('${u.id}')">
+      <div class="top" style="display:flex; justify-content:space-between; gap:8px;">
+        <div style="font-size:13px; font-weight:700;">${u.name||'\u2014'}</div>
+        <span class="pill ${pillClass}">${pillText}</span>
+      </div>
+      <div class="muted" style="font-size:11px; margin-top:2px;">${u.email||''}${whenText?' \u00b7 '+whenText:''}</div>
+    </div>`;
+  }).join('') || `<div class="empty">No login activity recorded yet.</div>`;
+}
+
 // ---------------- Individual email to a user (admin) ----------------
 // Sent via the admin-send-email Edge Function (platform Resend key, not the
 // per-user resend_api_key in email_settings — that one belongs to the user
@@ -3206,13 +3346,16 @@ async function doAdminSendWhatsapp(userId){
 let adminDetailUserId = null;
 let adminDetailData = null;
 let adminDetailTab = 'clients';
+let adminDetailLoginHistory = null;
 
 function openAdminUserDetail(userId){
   adminDetailUserId = userId;
   adminDetailData = null;
   adminDetailTab = 'clients';
+  adminDetailLoginHistory = null;
   goto('admin-user-detail');
   loadAdminUserDetail(userId);
+  loadAdminUserLoginHistory(userId);
 }
 
 async function loadAdminUserDetail(userId){
@@ -3234,8 +3377,30 @@ async function loadAdminUserDetail(userId){
   if(adminDetailUserId===userId) renderAdminUserDetail();
 }
 
+// Full login/logout history for one user (last 50 events) — same
+// admin-only SECURITY DEFINER pattern as admin_get_user_data above, kept
+// as a separate call so a slow user-data fetch never blocks it or vice versa.
+async function loadAdminUserLoginHistory(userId){
+  const { data, error } = await sb.rpc('admin_get_login_history', { p_user_id: userId });
+  if(!error && adminDetailUserId===userId){
+    adminDetailLoginHistory = data || [];
+    renderAdminUserDetail();
+  }
+}
+
 function setAdminDetailTab(t){ adminDetailTab = t; renderAdminUserDetail(); }
 
+function renderAdminUserLoginHistoryHtml(){
+  if(adminDetailLoginHistory===null) return `<div class="muted" style="font-size:12px;">Loading\u2026</div>`;
+  if(!adminDetailLoginHistory.length) return `<div class="muted" style="font-size:12px;">No login activity recorded yet.</div>`;
+  const latest = adminDetailLoginHistory[0];
+  const online = latest.event==='login';
+  let html = `<div class="line" style="margin-bottom:8px;"><span class="pill ${online?'Paid':'Overdue'}">${online?'Online':'Offline'}</span> <span class="muted" style="font-size:11px;">${online?'since':'logged out'} ${fmtDateTime(latest.created_at)}</span></div>`;
+  html += adminDetailLoginHistory.map(ev=>
+    `<div class="line muted" style="font-size:11.5px;">${ic(ev.event==='login'?'shield':'back',12)} ${ev.event==='login'?'Logged in':'Logged out'} \u00b7 ${fmtDateTime(ev.created_at)}</div>`
+  ).join('');
+  return html;
+}
 function renderAdminUserDetail(){
   const body = document.getElementById('admin-user-detail-body');
   const u = adminUsersCache.find(x=>x.id===adminDetailUserId);
@@ -3255,6 +3420,9 @@ function renderAdminUserDetail(){
       <div class="line muted" style="font-size:11.5px;">${ic('calendar',13)} Registered ${fmtDate(u.created_at)}</div>
       <div class="line" style="margin-top:6px;"><span class="pill ${u.role==='admin'?'Sent':'Paid'}">${u.role==='admin'?'Admin':'User'}</span>${u.is_active===false?' <span class="pill Overdue">Suspended</span>':''}</div>
     </div>
+
+    <div class="section-head" style="padding-top:14px;"><h2>Login Activity</h2></div>
+    <div class="card" id="admin-user-login-card">${renderAdminUserLoginHistoryHtml()}</div>
 
     <div class="section-head" style="padding-top:14px;"><h2>Email This User</h2></div>
     <div class="card">
@@ -5802,6 +5970,7 @@ async function completeRegistration(){
 
     await fetchAllData();
     paintStaticChrome();
+    logLoginEvent('login');
     otpContext=null;
     registerPhoneVerified=false;
     registerPhoneVerifiedE164='';
@@ -5993,6 +6162,7 @@ async function doVerifyOtp(){
     catch(e){ reportCrash(e && e.message, e && e.stack, 'otp'); }
     paintStaticChrome();
     logNotifEvent('loginSecurity', 'New Login', 'You signed in to your StampBook account.');
+    logLoginEvent('login');
     const target=currentAuth.role==='admin'?'admin':'home';
     history.replaceState({screen:target},'', '#/'+target);
     goto(target,{fromPopstate:true});
