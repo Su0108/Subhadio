@@ -2336,7 +2336,7 @@ doc.setLineWidth(0.2);
 const maxW = 76, maxH = 40;
 let textX = mL;
 try{
-const logoUrl = p.logoUrl || STAMPBOOK_LOGO_URL;
+const logoUrl = STAMPBOOK_LOGO_URL;
 const logoDataUrl = await urlToDataUrl(logoUrl);
 const { w: nw, h: nh } = await imageDataUrlSize(logoDataUrl);
 const scale = Math.min(maxW/nw, maxH/nh);
@@ -2347,7 +2347,7 @@ textX = mL + w + 14;
 }catch(e){}
 doc.setTextColor(30,25,23);
 doc.setFont('helvetica','bold'); doc.setFontSize(20);
-doc.text(p.customerName || 'StampBook', textX, hy-5);
+doc.text('StampBook', textX, hy-5);
 doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(120,110,105);
 doc.text('Ad-free plan purchase', textX, hy+13);
 doc.setTextColor(theme[0], theme[1], theme[2]);
