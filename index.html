@@ -1375,8 +1375,9 @@
       <div id="ads-currently-off-card" style="display:none;" class="ads-off-card">
         <div style="font-size:14px;font-weight:800;">Ads are currently off for your account</div>
         <div class="muted" style="font-size:12px;margin-top:4px;" id="ads-off-until-text"></div>
+        <button class="btn" style="margin-top:12px;display:none;" id="ads-off-download-btn" onclick="downloadAdsInvoice()">Download Invoice</button>
       </div>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px;line-height:1.5;">Pick a plan below to remove ads from StampBook for you.</div>
+      <div class="muted" id="ads-pick-plan-text" style="font-size:12.5px;margin-bottom:12px;line-height:1.5;">Pick a plan below to remove ads from StampBook for you.</div>
       <div id="ads-plan-list"></div>
       <div class="auth-error" id="ads-purchase-error"></div>
       <button class="btn" style="margin-top:14px;" id="ads-pay-btn" onclick="payForAdsRemoval()" disabled>Select a plan</button>
@@ -2210,6 +2211,7 @@ async function fetchAllData(){
 
   saveCachedData();
   setupRealtimeSync();
+  updateNotifDot();
 }
 
 // =====================================================================
@@ -2481,6 +2483,7 @@ function paintStaticChrome(){
   document.getElementById('rep-history-link').innerHTML = ic('calendar',14)+' History';
   document.getElementById('rep-add-expense').innerHTML = ic('plus',13)+' Add';
   document.getElementById('hist-back').innerHTML = ic('back',18);
+  document.getElementById('ads-back').innerHTML = ic('back',18);
   document.getElementById('notif-back').innerHTML = ic('back',18);
   document.getElementById('notifsettings-back').innerHTML = ic('back',18);
   document.getElementById('notifpref-icon-paymentReminders').innerHTML = ic('calendar',13);
@@ -2898,33 +2901,62 @@ const ADS_PLAN_DEFS = [
 let adsSelectedPlan = null;
 let lastAdsPurchase = null; // holds the record used to build/download the invoice after a successful purchase
 
+// Persisted per-device so "Download Invoice" keeps working after the user
+// navigates away, closes the app, or reopens it later -- not just in the
+// same session right after paying.
+const ADS_LAST_PURCHASE_KEY = 'stampbook_last_ads_purchase';
+function saveLastAdsPurchase(p){ try{ localStorage.setItem(ADS_LAST_PURCHASE_KEY, JSON.stringify(p)); }catch(e){} }
+function loadLastAdsPurchase(){ try{ return JSON.parse(localStorage.getItem(ADS_LAST_PURCHASE_KEY) || 'null'); }catch(e){ return null; } }
+
 async function renderTurnOffAdsScreen(){
   adsSelectedPlan = null;
   document.getElementById('ads-success-card').style.display = 'none';
   hideAuthError('ads-purchase-error');
   const offCard = document.getElementById('ads-currently-off-card');
+  const pickText = document.getElementById('ads-pick-plan-text');
+  const list = document.getElementById('ads-plan-list');
+  const payBtn = document.getElementById('ads-pay-btn');
+  const downloadBtn = document.getElementById('ads-off-download-btn');
+
+  // A plan is already active: show the status + a way to re-download the
+  // invoice, and don't show the buy-a-plan screen again until it expires.
   if(adsCurrentlyOff() && profile.adsOffUntil){
     offCard.style.display = 'block';
     document.getElementById('ads-off-until-text').textContent = 'Paid off until ' + fmtDate(profile.adsOffUntil);
-  } else {
-    offCard.style.display = 'none';
+    if(!lastAdsPurchase) lastAdsPurchase = loadLastAdsPurchase();
+    downloadBtn.style.display = lastAdsPurchase ? 'flex' : 'none';
+    pickText.style.display = 'none';
+    list.innerHTML = '';
+    payBtn.style.display = 'none';
+    return;
   }
-  const list = document.getElementById('ads-plan-list');
+
+  offCard.style.display = 'none';
+  pickText.style.display = 'block';
+  payBtn.style.display = 'flex';
+  payBtn.disabled = true;
+  payBtn.textContent = 'Select a plan';
   list.innerHTML = '<div class="muted" style="font-size:12px;">Loading plans\u2026</div>';
-  const { data, error } = await sb.from('platform_settings').select('*').eq('id', 1).maybeSingle();
-  if(error || !data){ list.innerHTML = '<div class="empty">Could not load plans right now.</div>'; return; }
-  platformAdsSettings = data;
-  const enabledPlans = ADS_PLAN_DEFS.filter(p => data[p.enabledField] !== false);
-  if(!enabledPlans.length){ list.innerHTML = '<div class="empty">No ad-free plans are available right now.</div>'; return; }
-  list.innerHTML = enabledPlans.map(p => `
-    <div class="plancard" id="plancard-${p.key}" onclick="selectAdsPlan('${p.key}')">
-      <div>
-        <div class="pc-name">${p.label}</div>
-        <div class="pc-sub">${p.days} days, ads-free</div>
+  try{
+    const { data, error } = await sb.from('platform_settings').select('*').eq('id', 1).maybeSingle();
+    if(error || !data){ list.innerHTML = '<div class="empty">Could not load plans right now.</div>'; return; }
+    platformAdsSettings = data;
+    const enabledPlans = ADS_PLAN_DEFS.filter(p => data[p.enabledField] !== false);
+    if(!enabledPlans.length){ list.innerHTML = '<div class="empty">No ad-free plans are available right now.</div>'; return; }
+    list.innerHTML = enabledPlans.map(p => `
+      <div class="plancard" id="plancard-${p.key}" onclick="selectAdsPlan('${p.key}')">
+        <div>
+          <div class="pc-name">${p.label}</div>
+          <div class="pc-sub">${p.days} days, ads-free</div>
+        </div>
+        <div class="pc-price">\u20b9${Number(data[p.priceField]||0).toLocaleString('en-IN')}</div>
       </div>
-      <div class="pc-price">\u20b9${Number(data[p.priceField]||0).toLocaleString('en-IN')}</div>
-    </div>
-  `).join('');
+    `).join('');
+  }catch(e){
+    // Network/RLS failures land here instead of leaving the screen stuck
+    // on "Loading plans..." forever.
+    list.innerHTML = '<div class="empty">Could not load plans right now.</div>';
+  }
 }
 function selectAdsPlan(key){
   adsSelectedPlan = ADS_PLAN_DEFS.find(p => p.key === key);
@@ -3012,7 +3044,11 @@ async function confirmAdsPurchase(rpResponse, order){
       validUntil: result.valid_until,
       customerName: profile.name || '',
       phone: profile.phone || '',
+      transactionId: rpResponse.razorpay_payment_id || '',
+      themeColor: business.themeColor || '#C0392B',
+      logoUrl: business.logoUrl || '',
     };
+    saveLastAdsPurchase(lastAdsPurchase);
     hidePaymentWaitOverlay();
     document.getElementById('ads-success-card').style.display = 'block';
     showToast('Ads turned off');
@@ -3058,11 +3094,26 @@ async function uploadPdfToCloudinary(blob, filename){
   return data.secure_url;
 }
 
-// Builds and downloads the StampBook-branded "Turn Off Ads" invoice
-// (Aster-style: circular logo, thin accent rule, clean label/value rows)
-// as a PDF for the business owner. The same PDF is sent to the platform
-// admin's WhatsApp by the ads-verify-payment Edge Function server-side.
+// Builds and downloads the "Turn Off Ads" invoice as a PDF for the
+// business owner, styled to match their own invoice theme (business
+// settings: theme color + logo), not a fixed StampBook look. Amounts are
+// written as "Rs" rather than the \u20b9 symbol. The same PDF is uploaded
+// to Cloudinary and its link sent to the platform admin's WhatsApp by
+// notifyAdminOfAdsPurchase(), after this function returns.
 const STAMPBOOK_LOGO_URL = 'https://res.cloudinary.com/xszjfxug/image/upload/v1790123632/stampbook_logos/rwsg9iu4fooubisylsvs.png';
+// Loads an image and returns its natural {w,h} -- used to fit the logo
+// into a box by its own aspect ratio instead of stretching or cropping
+// it square, since this logo is drawn independently, not inside a circle.
+async function imageDataUrlSize(src){
+  const img = await new Promise((resolve, reject)=>{
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = src;
+  });
+  return { w: img.naturalWidth, h: img.naturalHeight };
+}
 async function buildAdsInvoicePDF(p){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'pt', format:'a4' });
@@ -3070,7 +3121,7 @@ async function buildAdsInvoicePDF(p){
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 44;
   const mL = margin, mR = pageW - margin;
-  const theme = [192, 57, 43];
+  const theme = hexToRgb(p.themeColor);
   doc.setFillColor(theme[0], theme[1], theme[2]);
   doc.rect(0,0,7,pageH,'F');
   const headerH = 100, hy = headerH/2;
@@ -3079,20 +3130,27 @@ async function buildAdsInvoicePDF(p){
   doc.setDrawColor(230,222,216); doc.setLineWidth(0.6);
   doc.line(mL, headerH-2, mR, headerH-2);
   doc.setLineWidth(0.2);
+
+  // Logo drawn independently -- its own shape, no white disc or circular
+  // clip behind it -- fitted into a box by its natural aspect ratio.
+  const maxW = 76, maxH = 40;
+  let textX = mL;
   try{
-    const cx = mL+18, cy = hy, r = 20;
-    const logoDataUrl = await urlToDataUrl(STAMPBOOK_LOGO_URL);
-    doc.setFillColor(255,255,255); doc.circle(cx, cy, r, 'F');
-    const squareLogo = await squareCropDataUrl(logoDataUrl, 200);
-    doc.saveGraphicsState(); doc.circle(cx, cy, r); doc.clip(); doc.discardPath();
-    doc.addImage(squareLogo, 'PNG', cx-r, cy-r, r*2, r*2);
-    doc.restoreGraphicsState();
+    const logoUrl = p.logoUrl || STAMPBOOK_LOGO_URL;
+    const logoDataUrl = await urlToDataUrl(logoUrl);
+    const { w: nw, h: nh } = await imageDataUrlSize(logoDataUrl);
+    const scale = Math.min(maxW/nw, maxH/nh);
+    const w = nw*scale, h = nh*scale;
+    const format = /^data:image\/(\w+)/.exec(logoDataUrl);
+    doc.addImage(logoDataUrl, (format ? format[1] : 'PNG').toUpperCase(), mL, hy-h/2, w, h);
+    textX = mL + w + 14;
   }catch(e){}
+
   doc.setTextColor(30,25,23);
   doc.setFont('helvetica','bold'); doc.setFontSize(20);
-  doc.text('StampBook', mL+46, hy-5);
+  doc.text(p.customerName || 'StampBook', textX, hy-5);
   doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(120,110,105);
-  doc.text('Ad-free plan purchase', mL+46, hy+13);
+  doc.text('Ad-free plan purchase', textX, hy+13);
   doc.setTextColor(theme[0], theme[1], theme[2]);
   doc.setFont('helvetica','bold'); doc.setFontSize(26);
   doc.text('INVOICE', mR, hy-3, { align:'right' });
@@ -3111,6 +3169,7 @@ async function buildAdsInvoicePDF(p){
   row('Customer Name', p.customerName);
   row('Mobile Number', p.phone);
   row('Purchase Plan', p.plan);
+  row('Transaction ID', p.transactionId);
   row('Date & Time of Purchase', fmtDateTime(p.purchasedAt));
   row('Date of Purchase', fmtDate(p.purchasedAt));
   row('Valid Until', fmtDate(p.validUntil));
@@ -3121,13 +3180,14 @@ async function buildAdsInvoicePDF(p){
   doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(120,110,105);
   doc.text('Amount Paid', mL+16, y+29);
   doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(theme[0], theme[1], theme[2]);
-  doc.text('\u20b9'+Number(p.amount||0).toLocaleString('en-IN'), mR-16, y+29, { align:'right' });
+  doc.text('Rs '+Number(p.amount||0).toLocaleString('en-IN'), mR-16, y+29, { align:'right' });
 
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(160,150,145);
   doc.text('StampBook \u00b7 This is a system-generated invoice.', pageW/2, pageH-30, { align:'center' });
   return doc;
 }
 async function downloadAdsInvoice(){
+  if(!lastAdsPurchase) lastAdsPurchase = loadLastAdsPurchase();
   if(!lastAdsPurchase) return;
   const doc = await buildAdsInvoicePDF(lastAdsPurchase);
   doc.save('StampBook-AdsInvoice-'+lastAdsPurchase.invoiceNo+'.pdf');
@@ -4080,9 +4140,7 @@ function renderHome(){
   document.getElementById('home-month').textContent = rupee(t.month);
   document.getElementById('home-clientcount').textContent = clients.length;
 
-  const dueSoonOrOverdue = allInvoicesComputed().filter(i=>i.status==='Overdue'|| (i.status==='Sent' && isDueTomorrow(i.dueDate)));
-  const dot = document.getElementById('home-bell-dot');
-  if(dot) dot.style.display = dueSoonOrOverdue.length ? 'block' : 'none';
+  updateNotifDot();
 
   const recent = allInvoicesComputed().sort((a,b)=> new Date(b.date)-new Date(a.date)).slice(0,3);
   document.getElementById('home-recent').innerHTML = recent.map(inv=>{
@@ -5953,8 +6011,13 @@ function renderGatewayFields(){
 }
 async function renderPaymentGatewaySettings(){
   if(!currentAuth) return;
-  const { data:pg, error:pgErr } = await sb.from('payment_gateway_settings').select('*').eq('user_id', currentAuth.id).maybeSingle();
+  // order+limit(1) instead of maybeSingle(): if an old duplicate row exists
+  // from before payment_gateway_settings saves specified onConflict, this
+  // keeps loading the newest one instead of erroring out (which used to
+  // make the whole form come back empty after a refresh).
+  const { data:pgRows, error:pgErr } = await sb.from('payment_gateway_settings').select('*').eq('user_id', currentAuth.id).order('updated_at', { ascending:false }).limit(1);
   if(pgErr) console.error(pgErr);
+  const pg = pgRows && pgRows[0];
 
   document.getElementById('rp-keyid').value = pg?.razorpay_key_id || '';
   document.getElementById('rp-secret').value = pg?.razorpay_key_secret || '';
@@ -5995,7 +6058,7 @@ async function savePaymentGatewaySettings(){
     user_id: currentAuth.id, active_gateway: activeGateway,
     razorpay_key_id, razorpay_key_secret, razorpay_is_live,
     updated_at: new Date().toISOString()
-  });
+  }, { onConflict: 'user_id' });
   if(pgError){ alert('Could not save payment settings: '+pgError.message); return; }
 
   showToast('Payment settings saved');
@@ -6003,7 +6066,10 @@ async function savePaymentGatewaySettings(){
 }
 
 // ---------------- NOTIFICATIONS ----------------
-async function renderNotifications(){
+// Builds the notification feed items -- shared by renderNotifications()
+// (the full list) and updateNotifDot() (just needs the newest date), so
+// the two always agree on what "newest" means.
+async function buildNotifItems(){
   const items = [];
   if(notifPrefs.paymentReceived) [...payments].slice(0,3).forEach(p=>{
     items.push({icon:'wallet', tone:'green', title:'Payment Received', desc:rupee(p.amount)+' payment received from '+(clientById(p.clientId)||{}).name, date:p.date});
@@ -6018,16 +6084,54 @@ async function renderNotifications(){
     if(!notifPrefs[e.type]) return;
     items.push({icon: e.type==='loginSecurity' ? 'shield' : 'user', tone: e.type==='loginSecurity' ? 'amber' : 'blue', title:e.title, desc:e.desc, date:e.date});
   });
-  const { data:broadcasts } = await sb.from('broadcasts').select('*').order('created_at', { ascending:false }).limit(10);
-  (broadcasts||[]).forEach(b=>{
-    items.push({icon:'bell', tone:'blue', title:b.title, desc:b.body, date:b.created_at});
-  });
+  try{
+    const { data:broadcasts } = await sb.from('broadcasts').select('*').order('created_at', { ascending:false }).limit(10);
+    (broadcasts||[]).forEach(b=>{
+      items.push({icon:'bell', tone:'blue', title:b.title, desc:b.body, date:b.created_at});
+    });
+  }catch(e){}
   items.sort((a,b)=> new Date(b.date)-new Date(a.date));
+  return items;
+}
+
+// Persisted per-device: the timestamp of the newest notification the user
+// has already seen (updated whenever they open the Notifications screen).
+const NOTIF_SEEN_KEY = 'stampbook_notif_seen_at';
+function getNotifSeenAt(){ try{ return localStorage.getItem(NOTIF_SEEN_KEY) || null; }catch(e){ return null; } }
+function setNotifSeenAt(iso){ try{ localStorage.setItem(NOTIF_SEEN_KEY, iso); }catch(e){} }
+
+// The home bell's red dot lights up only when a notification newer than
+// the last-seen timestamp exists -- not just whenever an invoice happens
+// to be overdue. On the very first run (nothing seen yet), whatever is
+// already there is treated as already-seen so the dot doesn't light up
+// for old data the user never actually got notified about.
+async function updateNotifDot(){
+  const dot = document.getElementById('home-bell-dot');
+  if(!dot || !getAuth()) return;
+  try{
+    const items = await buildNotifItems();
+    const newest = items[0] && items[0].date;
+    const seenAt = getNotifSeenAt();
+    if(!seenAt){
+      setNotifSeenAt(new Date().toISOString());
+      dot.style.display = 'none';
+      return;
+    }
+    dot.style.display = (newest && new Date(newest) > new Date(seenAt)) ? 'block' : 'none';
+  }catch(e){}
+}
+
+async function renderNotifications(){
+  const items = await buildNotifItems();
   document.getElementById('notif-list').innerHTML = items.map(n=>`
     <div class="notif-item">
       <div class="ic ${n.tone}">${ic(n.icon,17)}</div>
       <div><div class="t">${n.title}</div><div class="d">${n.desc}</div><div class="time">${fmtDate(n.date)}</div></div>
     </div>`).join('') || `<div class="empty">${ic('bell',34)}You're all caught up</div>`;
+  // Opening the list marks everything currently in it as seen, so the
+  // home bell dot clears immediately rather than reappearing next visit.
+  setNotifSeenAt(items[0] ? items[0].date : new Date().toISOString());
+  updateNotifDot();
 }
 
 // ---------------- HELP & SUPPORT ----------------
