@@ -4375,10 +4375,15 @@ document.addEventListener('visibilitychange', ()=>{
   if(!upiAwaitingReturn) return;
   const { invId } = upiAwaitingReturn;
   upiAwaitingReturn = null;
+  // Same "waiting for confirmation" spinner used for Razorpay, shown briefly
+  // here too so returning from the UPI app doesn't feel abrupt — UPI has no
+  // real confirmation callback, so this is just a short pause before we ask.
+  showPaymentWaitOverlay(10);
   setTimeout(()=>{
+    hidePaymentWaitOverlay();
     document.getElementById('upi-confirm-pending-id').value = invId;
     document.getElementById('upi-confirm-overlay').classList.add('active');
-  }, 400); // small delay so this doesn't flash while the app switch animation is still settling
+  }, 10000);
 });
 function dismissUpiConfirm(){
   document.getElementById('upi-confirm-overlay').classList.remove('active');
