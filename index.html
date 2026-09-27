@@ -632,6 +632,16 @@
           placeholder="10-digit mobile number or email" autocomplete="username"
           oninput="syncLoginIdentifierUI()">
       </div>
+      <!-- Supabase Auth's Bot and Abuse Protection applies to every Auth
+           endpoint, not just sign-up — so signInWithOtp() on login also
+           requires a solved CAPTCHA token, or the API rejects the request
+           with "captcha protection: request disallowed". -->
+      <div class="field">
+        <div id="login-turnstile" class="cf-turnstile" data-sitekey="0x4AAAAAAFE696Jg3rOkvp0j"
+          data-callback="onLoginCaptchaSuccess" data-expired-callback="onLoginCaptchaExpired"
+          data-error-callback="onLoginCaptchaExpired"></div>
+      </div>
+
       <button class="btn" id="login-btn" onclick="doSendLoginOtp()">Send OTP</button>
       <div class="login-note" id="login-note">A 6-digit OTP will be sent to your WhatsApp number or email.</div>
       <div class="switch-row">New here? <button onclick="goto('register')">Create an account</button></div>
@@ -2447,6 +2457,7 @@ function goto(name, opts){
   if(name==='home') renderHome();
   if(name==='admin-notices') fetchAdminNotices();
   if(name==='register'){ resetRegCaptcha(); }
+  if(name==='login'){ resetLoginCaptcha(); }
   if(name==='invoices') renderInvoices();
   if(name==='clients') renderClients();
   if(name==='payments') renderPayments();
@@ -5715,6 +5726,20 @@ function resetRegCaptcha(){
   syncRegisterPhoneUI();
 }
 
+// Same requirement applies on login: Supabase Auth's Bot and Abuse
+// Protection checks every signInWithOtp() call, not just sign-up ones.
+let loginCaptchaToken = null;
+function onLoginCaptchaSuccess(token){ loginCaptchaToken = token; }
+function onLoginCaptchaExpired(){ loginCaptchaToken = null; }
+// Turnstile tokens are single-use — call this after every signInWithOtp
+// attempt (success or failure) so a stale token is never reused.
+function resetLoginCaptcha(){
+  loginCaptchaToken = null;
+  if(window.turnstile && document.getElementById('login-turnstile')){
+    try{ turnstile.reset('#login-turnstile'); }catch(e){}
+  }
+}
+
 function syncRegisterPhoneUI(){
   const input = document.getElementById('reg-phone');
   const btn = document.getElementById('reg-phone-verify-btn');
@@ -5790,14 +5815,19 @@ async function doSendLoginOtp(){
     showAuthError('login-error','Please enter a valid 10-digit WhatsApp number or email address.');
     return;
   }
+  if(!loginCaptchaToken){
+    showAuthError('login-error','Please complete the CAPTCHA first.');
+    return;
+  }
   setBtnBusy('login-btn',true,'Sending OTP…');
   try{
     if(isPhone){
       const phone = toE164(raw);
       const {error} = await sb.auth.signInWithOtp({
         phone,
-        options:{shouldCreateUser:false, channel:'whatsapp'}
+        options:{shouldCreateUser:false, channel:'whatsapp', captchaToken:loginCaptchaToken}
       });
+      resetLoginCaptcha(); // single-use token — clear it whether this succeeded or not
       if(error){
         showAuthError('login-error',
           'No account was found for this number. <button class="link-inline" onclick="goto(\'register\')">Register instead</button>');
@@ -5808,8 +5838,9 @@ async function doSendLoginOtp(){
       const email = raw.toLowerCase();
       const {error} = await sb.auth.signInWithOtp({
         email,
-        options:{shouldCreateUser:false}
+        options:{shouldCreateUser:false, captchaToken:loginCaptchaToken}
       });
+      resetLoginCaptcha();
       if(error){
         showAuthError('login-error',
           'No account was found for this email. <button class="link-inline" onclick="goto(\'register\')">Register instead</button>');
