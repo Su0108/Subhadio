@@ -5829,6 +5829,7 @@ async function doSendLoginOtp(){
       });
       resetLoginCaptcha(); // single-use token — clear it whether this succeeded or not
       if(error){
+        console.error('[login phone] signInWithOtp error:', error.status, error.message, error);
         showAuthError('login-error',
           'No account was found for this number. <button class="link-inline" onclick="goto(\'register\')">Register instead</button>');
         return;
@@ -5842,6 +5843,7 @@ async function doSendLoginOtp(){
       });
       resetLoginCaptcha();
       if(error){
+        console.error('[login email] signInWithOtp error:', error.status, error.message, error);
         showAuthError('login-error',
           'No account was found for this email. <button class="link-inline" onclick="goto(\'register\')">Register instead</button>');
         return;
