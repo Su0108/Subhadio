@@ -591,6 +591,7 @@
     .sidebar{display:none;}
   }
 </style>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
 
@@ -690,8 +691,21 @@
         <div class="phone-verify-status" id="reg-email-status">Verify your WhatsApp number first.</div>
       </div>
 
+      <!-- No account is created and nothing (name/phone/email) is written
+           to the database until this CAPTCHA is solved — the token it
+           produces is required by startRegisterPhoneVerification() before
+           it will call sb.auth.signInWithOtp(), which is the actual
+           account-creation step. Verified server-side by Supabase Auth,
+           not just in this page's JS, so it can't be bypassed by calling
+           the API directly. -->
+      <div class="field">
+        <div id="reg-turnstile" class="cf-turnstile" data-sitekey="0x4AAAAAAFE696Jg3rOkvp0j"
+          data-callback="onRegCaptchaSuccess" data-expired-callback="onRegCaptchaExpired"
+          data-error-callback="onRegCaptchaExpired"></div>
+      </div>
+
       <button class="btn" id="register-btn" onclick="completeRegistration()">Create Account</button>
-      <div class="login-note">Phone and email verification are both required before creating your account.</div>
+      <div class="login-note">Complete the CAPTCHA, then phone and email verification, before creating your account.</div>
       <div class="switch-row">Already have an account? <button onclick="goto('login')">Log in</button></div>
     </div>
   </div>
@@ -737,7 +751,7 @@
       <div class="stat"><div class="muted" style="font-size:11px;">Active</div><div class="v" id="admin-activecount">0</div></div>
       <div class="stat"><div class="muted" style="font-size:11px;">Suspended</div><div class="v" id="admin-suspendedcount">0</div></div>
       <div class="stat"><div class="muted" style="font-size:11px;">Total Invoices</div><div class="v" id="admin-invoicecount">0</div></div>
-      <div class="stat"><div class="muted" style="font-size:11px;">Payment Gateways Live</div><div class="v" id="admin-cashfreecount">0</div></div>
+      <div class="stat"><div class="muted" style="font-size:11px;">Payment Gateways Live</div><div class="v" id="admin-gatewaycount">0</div></div>
       <div class="stat"><div class="muted" style="font-size:11px;">Platform Revenue</div><div class="v" id="admin-revenue">₹0</div></div>
       <div class="stat"><div class="muted" style="font-size:11px;">Platform Outstanding</div><div class="v" id="admin-outstanding">₹0</div></div>
       <div class="stat"><div class="muted" style="font-size:11px;">New (7 days)</div><div class="v" id="admin-new7">0</div></div>
@@ -2175,12 +2189,10 @@ async function loadPublicInvoice(id){
 
   currentInvoiceId = invRow.id;
   publicInvoiceView = true;
-  publicCashfreeEnabled = !!data.cashfree_enabled;
   publicActiveGateway = data.active_gateway || null;
   publicUpiClaimedAt = data.upi_claimed_at || null;
   return true;
 }
-let publicCashfreeEnabled = false;
 let publicActiveGateway = null;
 // Set when the client has tapped "I've completed the payment" after a UPI
 // direct-pay redirect (see payViaUpi/confirmUpiClaim below). This never
@@ -2434,6 +2446,7 @@ function goto(name, opts){
 
   if(name==='home') renderHome();
   if(name==='admin-notices') fetchAdminNotices();
+  if(name==='register'){ resetRegCaptcha(); }
   if(name==='invoices') renderInvoices();
   if(name==='clients') renderClients();
   if(name==='payments') renderPayments();
@@ -2638,7 +2651,7 @@ async function renderAdmin(){
   document.getElementById('admin-activecount').textContent = s ? s.active_users : users.filter(u=>u.is_active!==false).length;
   document.getElementById('admin-suspendedcount').textContent = s ? s.suspended_users : users.filter(u=>u.is_active===false).length;
   document.getElementById('admin-invoicecount').textContent = s ? s.total_invoices : '\u2014';
-  document.getElementById('admin-cashfreecount').textContent = s ? s.cashfree_enabled_count : '\u2014';
+  document.getElementById('admin-gatewaycount').textContent = s ? s.gateways_live_count : '\u2014';
   document.getElementById('admin-revenue').textContent = s ? rupee(Number(s.total_revenue||0)) : '\u2014';
   document.getElementById('admin-outstanding').textContent = s ? rupee(Number(s.total_outstanding||0)) : '\u2014';
   document.getElementById('admin-new7').textContent = s ? s.new_users_7d : '\u2014';
@@ -2798,7 +2811,7 @@ function renderAdminGatewayUsage(list){
   renderAdminMainTabs();
   if(!el) return;
   if(!list){ el.innerHTML = `<div class="empty">Could not load gateway usage</div>`; return; }
-  const names = { razorpay:'Razorpay', cashfree:'Cashfree', payu:'PayU', instamojo:'Instamojo' };
+  const names = { razorpay:'Razorpay', upi:'UPI' };
   const connected = list.filter(u=>u.active_gateway);
   const notConnected = list.filter(u=>!u.active_gateway);
   el.innerHTML = `
@@ -3229,7 +3242,7 @@ async function loadAdminGatewayFailures(){
 function renderAdminGatewayFailures(){
   const el = document.getElementById('admin-gateway-failures');
   if(!el) return;
-  const names = { razorpay:'Razorpay', cashfree:'Cashfree', payu:'PayU', instamojo:'Instamojo' };
+  const names = { razorpay:'Razorpay' };
   const rows = adminFailuresCache.filter(g=>g.total_orders>0);
   if(!rows.length){ el.innerHTML = `<div class="empty">No gateway orders recorded yet.</div>`; return; }
   el.innerHTML = rows.map(g=>{
@@ -4275,20 +4288,16 @@ async function deleteInvoice(id){
     // from Supabase and the "deleted" invoice (and its payment) reappear,
     // which is exactly the bug being fixed here. Stop and surface the error
     // instead of proceeding past a failed step.
-    // Gateway order tables (razorpay_orders / payu_orders / cashfree_orders)
-    // FK-reference invoices.id too. Skipping these was the actual root cause
-    // of invoices "coming back": if an invoice was ever paid through one of
-    // these gateways, the final invoices delete below would be rejected by
-    // Postgres with a foreign-key violation — an error the old code never
-    // checked for, so it looked successful locally while the row survived.
+    // Gateway order tables FK-reference invoices.id too. Skipping these was
+    // the actual root cause of invoices "coming back": if an invoice was
+    // ever paid through one of these gateways, the final invoices delete
+    // below would be rejected by Postgres with a foreign-key violation —
+    // an error the old code never checked for, so it looked successful
+    // locally while the row survived. cashfree_orders/payu_orders/
+    // instamojo_orders were dropped along with those integrations, so
+    // razorpay_orders is the only one of these that still exists.
     const { error:rpErr } = await sb.from('razorpay_orders').delete().eq('invoice_id', id);
     if(rpErr){ alert('Could not delete invoice: '+rpErr.message); return; }
-    const { error:puErr } = await sb.from('payu_orders').delete().eq('invoice_id', id);
-    if(puErr){ alert('Could not delete invoice: '+puErr.message); return; }
-    const { error:cfErr } = await sb.from('cashfree_orders').delete().eq('invoice_id', id);
-    if(cfErr){ alert('Could not delete invoice: '+cfErr.message); return; }
-    const { error:imErr } = await sb.from('instamojo_orders').delete().eq('invoice_id', id);
-    if(imErr){ alert('Could not delete invoice: '+imErr.message); return; }
     const { error:itemsErr } = await sb.from('invoice_items').delete().eq('invoice_id', id);
     if(itemsErr){ alert('Could not delete invoice: '+itemsErr.message); return; }
     const { error:payErr } = await sb.from('payments').delete().eq('invoice_id', id);
@@ -4679,12 +4688,6 @@ async function deleteClient(clientId){
     if(invoiceIds.length){
       const { error:rpErr } = await sb.from('razorpay_orders').delete().in('invoice_id', invoiceIds);
       if(rpErr){ alert('Could not delete client: '+rpErr.message); return; }
-      const { error:puErr } = await sb.from('payu_orders').delete().in('invoice_id', invoiceIds);
-      if(puErr){ alert('Could not delete client: '+puErr.message); return; }
-      const { error:cfErr } = await sb.from('cashfree_orders').delete().in('invoice_id', invoiceIds);
-      if(cfErr){ alert('Could not delete client: '+cfErr.message); return; }
-      const { error:imErr } = await sb.from('instamojo_orders').delete().in('invoice_id', invoiceIds);
-      if(imErr){ alert('Could not delete client: '+imErr.message); return; }
       const { error:itemsErr } = await sb.from('invoice_items').delete().in('invoice_id', invoiceIds);
       if(itemsErr){ alert('Could not delete client: '+itemsErr.message); return; }
     }
@@ -5694,6 +5697,24 @@ let registerPhoneVerifiedE164 = '';
 let registerEmailVerified = false;
 let registerEmailVerifiedFor = '';
 
+// Cloudflare Turnstile CAPTCHA — must be solved before
+// startRegisterPhoneVerification() will call sb.auth.signInWithOtp(), the
+// step that actually creates the account and first writes name/phone/email.
+// Supabase Auth re-verifies this token server-side (Bot and Abuse
+// Protection setting), so it can't be skipped by calling the API directly.
+let regCaptchaToken = null;
+function onRegCaptchaSuccess(token){ regCaptchaToken = token; syncRegisterPhoneUI(); }
+function onRegCaptchaExpired(){ regCaptchaToken = null; syncRegisterPhoneUI(); }
+// Turnstile tokens are single-use — call this after every signInWithOtp
+// attempt (success or failure) so a stale token is never reused.
+function resetRegCaptcha(){
+  regCaptchaToken = null;
+  if(window.turnstile && document.getElementById('reg-turnstile')){
+    try{ turnstile.reset('#reg-turnstile'); }catch(e){}
+  }
+  syncRegisterPhoneUI();
+}
+
 function syncRegisterPhoneUI(){
   const input = document.getElementById('reg-phone');
   const btn = document.getElementById('reg-phone-verify-btn');
@@ -5703,13 +5724,13 @@ function syncRegisterPhoneUI(){
     registerPhoneVerified = false;
     registerPhoneVerifiedE164 = '';
   }
-  btn.disabled = !PHONE_RE.test(input.value) || registerPhoneVerified;
+  btn.disabled = !PHONE_RE.test(input.value) || registerPhoneVerified || !regCaptchaToken;
   btn.textContent = registerPhoneVerified ? 'Verified ✓' : 'Verify';
   btn.classList.toggle('verified', registerPhoneVerified);
   status.classList.toggle('verified', registerPhoneVerified);
   status.innerHTML = registerPhoneVerified
     ? '<span class="wa-otp-badge">✓ WhatsApp number verified</span>'
-    : 'Verify this number with a 6-digit WhatsApp OTP.';
+    : (regCaptchaToken ? 'Verify this number with a 6-digit WhatsApp OTP.' : 'Please complete the CAPTCHA above first.');
   // Email can only be verified once a session exists, i.e. after phone
   // verification succeeds, so keep the email button's enabled state in
   // sync with phone status too.
@@ -5821,6 +5842,10 @@ async function startRegisterPhoneVerification(){
     showAuthError('reg-error','Please enter a valid email address.');
     return;
   }
+  if(!regCaptchaToken){
+    showAuthError('reg-error','Please complete the CAPTCHA first.');
+    return;
+  }
 
   const phone = toE164(phoneRaw);
   setBtnBusy('reg-phone-verify-btn',true,'Sending…');
@@ -5849,9 +5874,11 @@ async function startRegisterPhoneVerification(){
       options:{
         shouldCreateUser:true,
         channel:'whatsapp',
-        data:{name,designation,phone:phoneRaw,email}
+        data:{name,designation,phone:phoneRaw,email},
+        captchaToken:regCaptchaToken
       }
     });
+    resetRegCaptcha(); // single-use token — clear it whether this succeeded or not
     if(error){
       showAuthError('reg-error',
         /already|registered|exists|duplicate key|unique constraint/i.test(error.message||'')
