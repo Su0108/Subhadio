@@ -125,6 +125,11 @@
   .listitem:active{background:#FAF7F4;}
   .bottomnav{position:fixed; left:0; right:0; bottom:0; background:var(--card); border-top:1px solid var(--line); padding:10px 22px calc(10px + env(safe-area-inset-bottom)); display:flex; align-items:center; justify-content:space-between; z-index:30; transition:transform .25s ease;}
   body.no-chrome .bottomnav{display:none;}
+  #anchor-ad-bar{position:fixed; left:0; right:0; bottom:calc(62px + env(safe-area-inset-bottom)); z-index:25; background:var(--card); border-top:1px solid var(--line); padding:4px 8px; align-items:center; gap:6px; display:none;}
+  #anchor-ad-bar.show{display:flex;}
+  body.no-chrome #anchor-ad-bar{display:none !important;}
+  #anchor-ad-bar .aa-close{flex:none; width:20px; height:20px; border-radius:50%; background:var(--slate-50); color:var(--muted); border:none; display:flex; align-items:center; justify-content:center; font-size:11px; cursor:pointer; padding:0;}
+  #anchor-ad-bar .aa-ins-wrap{flex:1; min-width:0; max-height:52px; overflow:hidden;}
   body.no-chrome .sidebar{display:none;}
   body.no-chrome .screen{padding-bottom:0;}
   .navbtn{background:none; border:none; color:#C9C1BB; padding:6px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; font-family:inherit; font-size:10px; font-weight:700;}
@@ -373,6 +378,17 @@
   .toggle-switch .slider::before{content:""; position:absolute; width:20px; height:20px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.25);}
   .toggle-switch input:checked + .slider{background:var(--red);}
   .toggle-switch input:checked + .slider::before{transform:translateX(18px);}
+  /* Hides every ad placement (static banners, the anchor bar, and any
+     in-feed card wrapped with .adblock-wrap) once the signed-in user's
+     account has ads switched off, whether by admin or by purchase. */
+  body.ads-off .adblock-wrap, body.ads-off #anchor-ad-bar{ display:none !important; }
+  .plancard{background:var(--card); border:2px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:10px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .plancard.selected{border-color:var(--red); background:var(--red-50);}
+  .plancard.disabled{opacity:.45; cursor:not-allowed;}
+  .plancard .pc-name{font-size:14px; font-weight:800;}
+  .plancard .pc-sub{font-size:11.5px; color:var(--muted); margin-top:2px;}
+  .plancard .pc-price{font-size:18px; font-weight:800; color:var(--red);}
+  .ads-off-card{background:var(--green-50); border:1px solid var(--green-200); border-radius:14px; padding:16px; text-align:center; margin-bottom:16px;}
 
   /* ---- Save-in-progress animation (StampBook themed) — invoice: feed-in
      document that settles into the tray and gets stamped, same layered
@@ -802,6 +818,40 @@
       <div class="px" id="admin-gateway-usage"></div>
     </div>
 
+    <div id="admin-tab-ads" style="display:none;">
+      <div class="section-head" style="padding-top:14px;"><h2>Ads</h2></div>
+      <div class="px">
+        <div class="card">
+          <div class="muted" style="font-size:11px;margin-bottom:10px;">Set the price of each ad-free plan and switch off any plan you don't want to sell right now. Prices are in ₹.</div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
+            <div class="field" style="flex:1;margin-bottom:0;"><label>Monthly Price (₹)</label><input id="ads-price-monthly" type="number" min="0"></div>
+            <label class="toggle-switch" style="margin-top:18px;" title="Sold"><input type="checkbox" id="ads-enabled-monthly"><span class="slider"></span></label>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
+            <div class="field" style="flex:1;margin-bottom:0;"><label>Weekly Price (₹)</label><input id="ads-price-weekly" type="number" min="0"></div>
+            <label class="toggle-switch" style="margin-top:18px;" title="Sold"><input type="checkbox" id="ads-enabled-weekly"><span class="slider"></span></label>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+            <div class="field" style="flex:1;margin-bottom:0;"><label>Yearly Price (₹)</label><input id="ads-price-yearly" type="number" min="0"></div>
+            <label class="toggle-switch" style="margin-top:18px;" title="Sold"><input type="checkbox" id="ads-enabled-yearly"><span class="slider"></span></label>
+          </div>
+          <div class="muted" style="font-size:11px;margin-bottom:10px;">Toggle a plan off to stop offering it on the "Turn Off Ads" screen \u2014 it stays hidden there until switched back on.</div>
+        </div>
+
+        <div class="card" style="margin-top:14px;">
+          <div style="font-size:14px;font-weight:800;margin-bottom:4px;">Payment Gateway Settings</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px;line-height:1.5;">The platform's own Razorpay account, used to charge users for turning off ads. This is separate from each business's own Razorpay keys under Business Settings.</div>
+          <div class="field"><label>Razorpay Key ID</label><input id="ads-rp-keyid" placeholder="e.g. rzp_live_xxxxxxxxxxxx"></div>
+          <div class="field"><label>Razorpay Key Secret</label><input id="ads-rp-secret" type="password" placeholder="Key Secret from Razorpay dashboard"></div>
+          <div class="field"><label>Admin WhatsApp Number (receives purchase invoices)</label><input id="ads-admin-whatsapp" placeholder="e.g. 9198xxxxxxx"></div>
+        </div>
+
+        <div class="auth-error" id="admin-ads-error"></div>
+        <button class="btn" style="margin-top:14px;" id="admin-ads-save-btn" onclick="saveAdminAdsSettings()">Save Ads Settings</button>
+      </div>
+    </div>
+
     <div id="admin-tab-broadcast" style="display:none;">
       <div class="section-head" style="padding-top:14px;"><h2>Broadcast Email</h2></div>
       <div class="px">
@@ -938,12 +988,12 @@
     <!-- AdSense banner: replace data-ad-client / data-ad-slot with your real values.
          Placed at the very bottom of Home, after everything the user actually
          opened the app for — never above content, never sticky, never a popup. -->
-    <div class="px" style="margin-top:18px; margin-bottom:8px;">
+    <div class="px adblock-wrap" style="margin-top:18px; margin-bottom:8px;">
       <div class="muted" style="font-size:10.5px; text-align:center; margin-bottom:4px; letter-spacing:.3px;">Advertisement</div>
       <ins class="adsbygoogle"
            style="display:block"
            data-ad-client="ca-pub-5534015246644026"
-           data-ad-slot="0000000000"
+           data-ad-slot="8815263126"
            data-ad-format="auto"
            data-full-width-responsive="true"></ins>
     </div>
@@ -958,6 +1008,11 @@
     <div class="searchbar" id="inv-search" style="display:none;"></div>
     <div class="filters" id="inv-filters"></div>
     <div class="px" style="margin-top:12px;" id="invoices-list"></div>
+    <!-- AdSense banner, once per Invoices screen visit — replace the slot ID with a real one from your AdSense dashboard. -->
+    <div class="px adblock-wrap">
+      <div class="muted" style="font-size:10.5px;text-align:center;margin-bottom:4px;letter-spacing:.3px;">Advertisement</div>
+      <ins id="ins-invoices-banner" class="adsbygoogle" style="display:block" data-ad-client="ca-pub-5534015246644026" data-ad-slot="1515357604" data-ad-format="auto" data-full-width-responsive="true"></ins>
+    </div>
   </div>
 
   <!-- 4. INVOICE DETAILS -->
@@ -1043,6 +1098,10 @@
     <div class="topbar"><div class="backrow"><div class="iconbtn" onclick="goto('home')" id="clients-back"></div><h1>Clients</h1></div><div class="iconbtn solid" onclick="openAddClient()" id="clients-add"></div></div>
     <div class="searchbar" id="cl-searchbar"></div>
     <div class="px" id="clients-list"></div>
+    <div class="px adblock-wrap">
+      <div class="muted" style="font-size:10.5px;text-align:center;margin-bottom:4px;letter-spacing:.3px;">Advertisement</div>
+      <ins id="ins-clients-banner" class="adsbygoogle" style="display:block" data-ad-client="ca-pub-5534015246644026" data-ad-slot="9651944483" data-ad-format="auto" data-full-width-responsive="true"></ins>
+    </div>
   </div>
 
   <!-- 8. CLIENT DETAILS -->
@@ -1091,6 +1150,10 @@
     <div class="topbar"><div class="backrow"><div class="iconbtn" onclick="goto('home')" id="pay-back"></div><h1>Payments</h1></div><div class="iconbtn solid" onclick="goto('addpayment')" id="pay-add"></div></div>
     <div class="searchbar" id="pay-searchbar"></div>
     <div class="px" id="payments-list"></div>
+    <div class="px adblock-wrap">
+      <div class="muted" style="font-size:10.5px;text-align:center;margin-bottom:4px;letter-spacing:.3px;">Advertisement</div>
+      <ins id="ins-payments-banner" class="adsbygoogle" style="display:block" data-ad-client="ca-pub-5534015246644026" data-ad-slot="1761760453" data-ad-format="auto" data-full-width-responsive="true"></ins>
+    </div>
   </div>
 
   <!-- 11. REPORTS / STATUS -->
@@ -1144,6 +1207,10 @@
       </div>
       <div style="font-size:14px;font-weight:800;margin-bottom:10px;" id="rep-top-title">Top Clients</div>
       <div id="rep-top"></div>
+      <div class="adblock-wrap" style="margin-top:14px;">
+        <div class="muted" style="font-size:10.5px;text-align:center;margin-bottom:4px;letter-spacing:.3px;">Advertisement</div>
+        <ins id="ins-reports-banner" class="adsbygoogle" style="display:block" data-ad-client="ca-pub-5534015246644026" data-ad-slot="2176779144" data-ad-format="auto" data-full-width-responsive="true"></ins>
+      </div>
     </div>
   </div>
 
@@ -1152,6 +1219,10 @@
     <div class="topbar"><div class="backrow"><div class="iconbtn" onclick="goto('reports')" id="hist-back"></div><h1>History</h1></div></div>
     <div class="filters" id="hist-filters"></div>
     <div class="px" style="margin-top:14px;" id="history-list"></div>
+    <div class="px adblock-wrap">
+      <div class="muted" style="font-size:10.5px;text-align:center;margin-bottom:4px;letter-spacing:.3px;">Advertisement</div>
+      <ins id="ins-history-banner" class="adsbygoogle" style="display:block" data-ad-client="ca-pub-5534015246644026" data-ad-slot="2249854771" data-ad-format="auto" data-full-width-responsive="true"></ins>
+    </div>
   </div>
 
   <!-- 13. PROFILE -->
@@ -1165,6 +1236,7 @@
     <div class="px" style="margin-top:18px;">
       <div class="menurow" onclick="goto('editprofile')"><span class="l" id="menu-editprofile"></span><span class="muted" id="chev1"></span></div>
       <div class="menurow" onclick="goto('business')"><span class="l" id="menu-business"></span><span class="muted" id="chev2"></span></div>
+      <div class="menurow" onclick="goto('turnoffads')"><span class="l" id="menu-turnoffads"></span><span class="muted" id="chev-ads"></span></div>
       <div class="menurow" onclick="goto('notification-settings')"><span class="l" id="menu-notif"></span><span class="muted" id="chev3"></span></div>
       <div class="menurow" id="menu-admin-row" style="display:none;" onclick="goto('admin')"><span class="l" id="menu-admin"></span><span class="muted" id="chev5"></span></div>
       <div class="menurow" onclick="toggleDarkMode()"><span class="l" id="menu-darkmode" style="gap:12px;"><span id="darkmode-icon"></span> <span id="darkmode-text">Dark Mode</span></span><span class="muted" id="chev-dm"></span></div>
@@ -1292,6 +1364,26 @@
         </div>
 
         <button class="btn" style="margin-top:14px;" onclick="savePaymentGatewaySettings()">Save Payment Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 15b. TURN OFF ADS -->
+  <div class="screen" id="screen-turnoffads">
+    <div class="topbar"><div class="backrow"><div class="iconbtn" onclick="goto('profile')" id="ads-back"></div><h1>Turn Off Ads</h1></div></div>
+    <div class="px">
+      <div id="ads-currently-off-card" style="display:none;" class="ads-off-card">
+        <div style="font-size:14px;font-weight:800;">Ads are currently off for your account</div>
+        <div class="muted" style="font-size:12px;margin-top:4px;" id="ads-off-until-text"></div>
+      </div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px;line-height:1.5;">Pick a plan below to remove ads from StampBook for you.</div>
+      <div id="ads-plan-list"></div>
+      <div class="auth-error" id="ads-purchase-error"></div>
+      <button class="btn" style="margin-top:14px;" id="ads-pay-btn" onclick="payForAdsRemoval()" disabled>Select a plan</button>
+      <div id="ads-success-card" style="display:none;margin-top:16px;" class="ads-off-card">
+        <div style="font-size:14px;font-weight:800;">Ads turned off</div>
+        <div class="muted" style="font-size:12px;margin-top:4px;">A confirmation email has been sent to you.</div>
+        <button class="btn" style="margin-top:12px;" onclick="downloadAdsInvoice()">Download Invoice</button>
       </div>
     </div>
   </div>
@@ -1569,6 +1661,16 @@
     </div>
   </div>
 
+  <!-- Small dismissible anchor ad, shown above the bottom nav only on
+       browsing screens (never on forms or the public invoice link) — see
+       updateAnchorAd() / ANCHOR_AD_SCREENS. -->
+  <div id="anchor-ad-bar">
+    <button class="aa-close" onclick="dismissAnchorAd()" aria-label="Close ad">✕</button>
+    <div class="aa-ins-wrap">
+      <ins id="ins-anchor-ad" class="adsbygoogle" style="display:block" data-ad-client="ca-pub-5534015246644026" data-ad-slot="7237534130" data-ad-format="auto" data-full-width-responsive="true"></ins>
+    </div>
+  </div>
+
   <div class="bottomnav" id="bottomnav">
     <button class="navbtn" data-nav="home" onclick="goto('home')"></button>
     <button class="navbtn" data-nav="invoices" onclick="goto('invoices')"></button>
@@ -1779,7 +1881,7 @@ function ic(name, size, cls){
 }
 
 // ---------------- state ----------------
-let profile = { name:'', designation:'', gender:'', phone:'', email:'' };
+let profile = { name:'', designation:'', gender:'', phone:'', email:'', adsEnabled:true, adsOffUntil:null };
 let business = { name:'', address:'', gstin:'', pan:'', bankName:'', account:'', ifsc:'', upi:'', prefix:'SB', nextNo:1001, tax:0, currency:'₹ INR', terms:'', template:'Classic', logoUrl:'', themeColor:'#C0392B', mdrEnabled:false };
 // UPI New Rule (MDR) is a device-level toggle, stored the same way as Dark
 // Mode — it isn't part of the business_settings table, so turning it on/off
@@ -1960,7 +2062,25 @@ async function refreshAuthFromSession(){
   profile.phone = prof.phone || '';
   profile.email = prof.email || '';
   profile.phoneVerified = !!prof.phone_verified;
+  profile.adsEnabled = prof.ads_enabled !== false;
+  profile.adsOffUntil = prof.ads_off_until || null;
+  updateAdsGate();
   return currentAuth;
+}
+
+// ---------------- ADS GATE ----------------
+// Whether ads may show to the signed-in user at all: an admin-set switch
+// (profiles.ads_enabled) that a paid "Turn Off Ads" purchase also turns
+// off until profiles.ads_off_until passes, after which ads resume even if
+// nothing has re-enabled the switch server-side yet.
+function adsCurrentlyOff(){
+  // A purchased ad-free period that has lapsed resumes ads even if the
+  // stored switch hasn't been flipped back server-side yet.
+  if(profile.adsOffUntil && new Date(profile.adsOffUntil) <= new Date()) return false;
+  return profile.adsEnabled === false;
+}
+function updateAdsGate(){
+  document.body.classList.toggle('ads-off', adsCurrentlyOff());
 }
 
 // ---- login/logout event log (for Admin -> Sessions) ----
@@ -2376,6 +2496,7 @@ function paintStaticChrome(){
   document.getElementById('biz-back').innerHTML = ic('back',18);
   document.getElementById('menu-editprofile').innerHTML = ic('user',17)+' Edit Profile';
   document.getElementById('menu-business').innerHTML = ic('briefcase',17)+' Business Settings';
+  document.getElementById('menu-turnoffads').innerHTML = ic('shield',17)+' Turn Off Ads';
   document.getElementById('menu-notif').innerHTML = ic('bell',17)+' Notification Settings';
   document.getElementById('menu-admin').innerHTML = ic('users',17)+' Admin Panel';
   document.getElementById('menu-help').innerHTML = ic('settings',17)+' Help &amp; Support';
@@ -2468,6 +2589,7 @@ function goto(name, opts){
   if(name==='addexpense') renderAddExpenseScreen();
   if(name==='editprofile') renderEditProfile();
   if(name==='business'){ renderBusinessSettings(); renderPaymentGatewaySettings(); }
+  if(name==='turnoffads') renderTurnOffAdsScreen();
   if(name==='notifications') renderNotifications();
   if(name==='notification-settings') renderNotificationSettings();
   if(name==='help') renderHelp();
@@ -2476,6 +2598,7 @@ function goto(name, opts){
   if(name==='otp') renderOtpScreen();
   if(name==='admin') renderAdmin();
   if(name==='admin-user-detail') renderAdminUserDetail();
+  updateAnchorAd(name, isPublicInvoiceRoute);
 
   target.scrollTop = 0;
   window.scrollTo(0,0);
@@ -2622,6 +2745,7 @@ let adminMainTab = 'gateway';
 // have loaded so far (0 before their fetch resolves).
 const ADMIN_MAIN_TABS = [
   ['gateway','Gateway', ()=> adminGatewayCache.filter(u=>u.active_gateway).length],
+  ['ads','Ads', null],
   ['broadcast','Broadcast', null],
   ['whatsapp','WhatsApp', null],
   ['tickets','Tickets', ()=> adminTicketsCache.filter(t=>t.status!=='resolved').length],
@@ -2703,6 +2827,310 @@ async function renderAdmin(){
   loadAdminChurn();
   loadAdminGatewayFailures();
   loadAdminSessions();
+  loadAdminAdsSettings();
+}
+
+// ---- Admin: ads pricing + platform payment gateway ----
+// platform_settings is a single row (id=1) holding the price/availability of
+// each ad-free plan plus the platform's own Razorpay keys, used only for
+// charging users to turn ads off (separate from each business's own
+// Razorpay keys under Business Settings, which charge that business's
+// clients).
+let platformAdsSettings = null;
+async function loadAdminAdsSettings(){
+  const { data, error } = await sb.from('platform_settings').select('*').eq('id', 1).maybeSingle();
+  if(error){ return; }
+  platformAdsSettings = data || {};
+  document.getElementById('ads-price-monthly').value = platformAdsSettings.ads_monthly_price ?? 49;
+  document.getElementById('ads-price-weekly').value = platformAdsSettings.ads_weekly_price ?? 19;
+  document.getElementById('ads-price-yearly').value = platformAdsSettings.ads_yearly_price ?? 399;
+  document.getElementById('ads-enabled-monthly').checked = platformAdsSettings.ads_monthly_enabled !== false;
+  document.getElementById('ads-enabled-weekly').checked = platformAdsSettings.ads_weekly_enabled !== false;
+  document.getElementById('ads-enabled-yearly').checked = platformAdsSettings.ads_yearly_enabled !== false;
+  document.getElementById('ads-rp-keyid').value = platformAdsSettings.razorpay_key_id || '';
+  document.getElementById('ads-rp-secret').value = platformAdsSettings.razorpay_key_secret || '';
+  document.getElementById('ads-admin-whatsapp').value = platformAdsSettings.admin_whatsapp || '';
+}
+async function saveAdminAdsSettings(){
+  hideAuthError('admin-ads-error');
+  const row = {
+    id: 1,
+    ads_monthly_price: Number(document.getElementById('ads-price-monthly').value || 0),
+    ads_weekly_price: Number(document.getElementById('ads-price-weekly').value || 0),
+    ads_yearly_price: Number(document.getElementById('ads-price-yearly').value || 0),
+    ads_monthly_enabled: document.getElementById('ads-enabled-monthly').checked,
+    ads_weekly_enabled: document.getElementById('ads-enabled-weekly').checked,
+    ads_yearly_enabled: document.getElementById('ads-enabled-yearly').checked,
+    razorpay_key_id: document.getElementById('ads-rp-keyid').value.trim(),
+    razorpay_key_secret: document.getElementById('ads-rp-secret').value.trim(),
+    admin_whatsapp: document.getElementById('ads-admin-whatsapp').value.trim(),
+  };
+  setBtnBusy('admin-ads-save-btn', true, 'Saving\u2026');
+  try{
+    const { error } = await sb.from('platform_settings').upsert(row, { onConflict:'id' });
+    if(error){ showAuthError('admin-ads-error', error.message || 'Could not save.'); return; }
+    platformAdsSettings = row;
+    showToast('Ads settings saved');
+  } finally {
+    setBtnBusy('admin-ads-save-btn', false);
+  }
+}
+
+// ---- Admin: per-user "show ads" switch (profiles.ads_enabled) ----
+// Independent of a user's own purchased ad-free period (profiles.ads_off_until):
+// turning this ON always shows ads again immediately; turning it OFF hides
+// ads for that user until an admin turns it back on, a purchase aside.
+async function toggleUserAdsOn(userId, checked){
+  const { error } = await sb.from('profiles').update({ ads_enabled: checked }).eq('id', userId);
+  if(error){ showToast('Could not update — ' + error.message); return; }
+  const u = adminUsersCache.find(x=>x.id===userId);
+  if(u) u.ads_enabled = checked;
+  if(adminDetailUserId===userId) renderAdminUserDetail();
+  showToast(checked ? 'Ads turned on for this user' : 'Ads turned off for this user');
+}
+
+// ---------------- USER: TURN OFF ADS (purchase flow) ----------------
+const ADS_PLAN_DEFS = [
+  { key:'weekly',  label:'Weekly',  days:7,   priceField:'ads_weekly_price',  enabledField:'ads_weekly_enabled'  },
+  { key:'monthly', label:'Monthly', days:30,  priceField:'ads_monthly_price', enabledField:'ads_monthly_enabled' },
+  { key:'yearly',  label:'Yearly',  days:365, priceField:'ads_yearly_price',  enabledField:'ads_yearly_enabled'  },
+];
+let adsSelectedPlan = null;
+let lastAdsPurchase = null; // holds the record used to build/download the invoice after a successful purchase
+
+async function renderTurnOffAdsScreen(){
+  adsSelectedPlan = null;
+  document.getElementById('ads-success-card').style.display = 'none';
+  hideAuthError('ads-purchase-error');
+  const offCard = document.getElementById('ads-currently-off-card');
+  if(adsCurrentlyOff() && profile.adsOffUntil){
+    offCard.style.display = 'block';
+    document.getElementById('ads-off-until-text').textContent = 'Paid off until ' + fmtDate(profile.adsOffUntil);
+  } else {
+    offCard.style.display = 'none';
+  }
+  const list = document.getElementById('ads-plan-list');
+  list.innerHTML = '<div class="muted" style="font-size:12px;">Loading plans\u2026</div>';
+  const { data, error } = await sb.from('platform_settings').select('*').eq('id', 1).maybeSingle();
+  if(error || !data){ list.innerHTML = '<div class="empty">Could not load plans right now.</div>'; return; }
+  platformAdsSettings = data;
+  const enabledPlans = ADS_PLAN_DEFS.filter(p => data[p.enabledField] !== false);
+  if(!enabledPlans.length){ list.innerHTML = '<div class="empty">No ad-free plans are available right now.</div>'; return; }
+  list.innerHTML = enabledPlans.map(p => `
+    <div class="plancard" id="plancard-${p.key}" onclick="selectAdsPlan('${p.key}')">
+      <div>
+        <div class="pc-name">${p.label}</div>
+        <div class="pc-sub">${p.days} days, ads-free</div>
+      </div>
+      <div class="pc-price">\u20b9${Number(data[p.priceField]||0).toLocaleString('en-IN')}</div>
+    </div>
+  `).join('');
+}
+function selectAdsPlan(key){
+  adsSelectedPlan = ADS_PLAN_DEFS.find(p => p.key === key);
+  document.querySelectorAll('.plancard').forEach(el => el.classList.toggle('selected', el.id === 'plancard-'+key));
+  const btn = document.getElementById('ads-pay-btn');
+  const price = platformAdsSettings ? platformAdsSettings[adsSelectedPlan.priceField] : 0;
+  btn.disabled = false;
+  btn.textContent = 'Pay \u20b9' + Number(price||0).toLocaleString('en-IN');
+}
+
+async function payForAdsRemoval(){
+  hideAuthError('ads-purchase-error');
+  if(!adsSelectedPlan){ showAuthError('ads-purchase-error', 'Pick a plan first.'); return; }
+  if(!platformAdsSettings || !platformAdsSettings.razorpay_key_id){
+    showAuthError('ads-purchase-error', 'Payments are not set up yet. Please try again later.');
+    return;
+  }
+  const amount = Number(platformAdsSettings[adsSelectedPlan.priceField] || 0);
+  setBtnBusy('ads-pay-btn', true, 'Starting payment\u2026');
+  try{
+    // ads-create-order is a platform-side Edge Function (separate from the
+    // per-business razorpay-create-order used for client invoices) that
+    // creates a Razorpay order under the platform's own Razorpay account.
+    const createRes = await fetch(CF_FUNCTIONS_BASE + '/ads-create-order', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + (await sb.auth.getSession()).data.session.access_token },
+      body: JSON.stringify({ plan: adsSelectedPlan.key, days: adsSelectedPlan.days })
+    });
+    const order = await createRes.json();
+    if(!createRes.ok || !order.order_id) throw new Error(order.error || 'Could not start payment.');
+
+    await loadRazorpayScript();
+    setBtnBusy('ads-pay-btn', false);
+
+    const rzp = new Razorpay({
+      key: order.key_id || platformAdsSettings.razorpay_key_id,
+      amount: order.amount || amount*100,
+      currency: order.currency || 'INR',
+      name: 'StampBook',
+      description: adsSelectedPlan.label + ' \u2014 Turn Off Ads',
+      order_id: order.order_id,
+      prefill: { name: profile.name || '', email: profile.email || '', contact: profile.phone || '' },
+      theme: { color: '#C0392B' },
+      handler: async function(response){
+        await confirmAdsPurchase(response, order);
+      },
+      modal: { ondismiss: function(){ setBtnBusy('ads-pay-btn', false); } }
+    });
+    rzp.open();
+  }catch(e){
+    showAuthError('ads-purchase-error', e.message || 'Payment could not be started.');
+    setBtnBusy('ads-pay-btn', false);
+  }
+}
+
+async function confirmAdsPurchase(rpResponse, order){
+  showPaymentWaitOverlay(5);
+  try{
+    // ads-verify-payment checks the Razorpay signature on the server, then
+    // (on success) flips profiles.ads_enabled off with an expiry, records
+    // the purchase, emails the business owner, and sends the paid invoice
+    // to the platform admin's WhatsApp.
+    const verifyRes = await fetch(CF_FUNCTIONS_BASE + '/ads-verify-payment', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + (await sb.auth.getSession()).data.session.access_token },
+      body: JSON.stringify({
+        razorpay_order_id: rpResponse.razorpay_order_id,
+        razorpay_payment_id: rpResponse.razorpay_payment_id,
+        razorpay_signature: rpResponse.razorpay_signature,
+        plan: adsSelectedPlan.key,
+        days: adsSelectedPlan.days,
+      })
+    });
+    const result = await verifyRes.json();
+    if(!verifyRes.ok || result.status !== 'PAID') throw new Error(result.error || 'Payment could not be confirmed.');
+
+    profile.adsEnabled = false;
+    profile.adsOffUntil = result.valid_until;
+    updateAdsGate();
+    lastAdsPurchase = {
+      invoiceNo: result.invoice_no,
+      plan: adsSelectedPlan.label,
+      amount: Number(platformAdsSettings[adsSelectedPlan.priceField] || 0),
+      purchasedAt: result.purchased_at || new Date().toISOString(),
+      validUntil: result.valid_until,
+      customerName: profile.name || '',
+      phone: profile.phone || '',
+    };
+    hidePaymentWaitOverlay();
+    document.getElementById('ads-success-card').style.display = 'block';
+    showToast('Ads turned off');
+
+    // Build the invoice PDF, upload it to Cloudinary, then tell the
+    // platform admin's WhatsApp about the purchase with a link to it.
+    // Runs after the success UI is already shown -- a failure here
+    // shouldn't block or alarm the user, the purchase itself is done.
+    notifyAdminOfAdsPurchase(lastAdsPurchase).catch(e => console.error('Admin WhatsApp notify failed:', e));
+  }catch(e){
+    hidePaymentWaitOverlay();
+    showAuthError('ads-purchase-error', e.message || 'Payment could not be confirmed.');
+  } finally {
+    setBtnBusy('ads-pay-btn', false);
+  }
+}
+
+async function notifyAdminOfAdsPurchase(purchase){
+  const doc = await buildAdsInvoicePDF(purchase);
+  const pdfBlob = doc.output('blob');
+  const pdfUrl = await uploadPdfToCloudinary(pdfBlob, 'StampBook-AdsInvoice-' + purchase.invoiceNo + '.pdf');
+  await fetch(CF_FUNCTIONS_BASE + '/ads-notify-admin', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer ' + (await sb.auth.getSession()).data.session.access_token },
+    body: JSON.stringify({ invoice_no: purchase.invoiceNo, pdf_url: pdfUrl })
+  });
+}
+// Same unsigned-preset pattern as uploadToCloudinary(), but for the PDF
+// invoice: resource_type 'raw' (Cloudinary's bucket for non-image/video
+// files) and its own folder so invoices don't mix with logo uploads.
+async function uploadPdfToCloudinary(blob, filename){
+  const formData = new FormData();
+  formData.append('file', blob, filename);
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  formData.append('folder', 'stampbook_ads_invoices');
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`, {
+    method: 'POST',
+    body: formData
+  });
+  if(!res.ok) throw new Error('Cloudinary PDF upload failed: ' + res.status);
+  const data = await res.json();
+  if(!data.secure_url) throw new Error('Cloudinary PDF upload returned no URL');
+  return data.secure_url;
+}
+
+// Builds and downloads the StampBook-branded "Turn Off Ads" invoice
+// (Aster-style: circular logo, thin accent rule, clean label/value rows)
+// as a PDF for the business owner. The same PDF is sent to the platform
+// admin's WhatsApp by the ads-verify-payment Edge Function server-side.
+const STAMPBOOK_LOGO_URL = 'https://res.cloudinary.com/xszjfxug/image/upload/v1790123632/stampbook_logos/rwsg9iu4fooubisylsvs.png';
+async function buildAdsInvoicePDF(p){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 44;
+  const mL = margin, mR = pageW - margin;
+  const theme = [192, 57, 43];
+  doc.setFillColor(theme[0], theme[1], theme[2]);
+  doc.rect(0,0,7,pageH,'F');
+  const headerH = 100, hy = headerH/2;
+  doc.setDrawColor(theme[0], theme[1], theme[2]); doc.setLineWidth(1.4);
+  doc.line(mL, headerH-6, mR, headerH-6);
+  doc.setDrawColor(230,222,216); doc.setLineWidth(0.6);
+  doc.line(mL, headerH-2, mR, headerH-2);
+  doc.setLineWidth(0.2);
+  try{
+    const cx = mL+18, cy = hy, r = 20;
+    const logoDataUrl = await urlToDataUrl(STAMPBOOK_LOGO_URL);
+    doc.setFillColor(255,255,255); doc.circle(cx, cy, r, 'F');
+    const squareLogo = await squareCropDataUrl(logoDataUrl, 200);
+    doc.saveGraphicsState(); doc.circle(cx, cy, r); doc.clip(); doc.discardPath();
+    doc.addImage(squareLogo, 'PNG', cx-r, cy-r, r*2, r*2);
+    doc.restoreGraphicsState();
+  }catch(e){}
+  doc.setTextColor(30,25,23);
+  doc.setFont('helvetica','bold'); doc.setFontSize(20);
+  doc.text('StampBook', mL+46, hy-5);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(120,110,105);
+  doc.text('Ad-free plan purchase', mL+46, hy+13);
+  doc.setTextColor(theme[0], theme[1], theme[2]);
+  doc.setFont('helvetica','bold'); doc.setFontSize(26);
+  doc.text('INVOICE', mR, hy-3, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(120,110,105);
+  doc.text('#'+p.invoiceNo, mR, hy+15, { align:'right' });
+
+  let y = headerH + 50;
+  const row = (label, value) => {
+    doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(140,130,124);
+    doc.text(label, mL, y);
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(30,25,23);
+    doc.text(String(value||'\u2014'), mR, y, { align:'right' });
+    y += 26;
+    doc.setDrawColor(238,232,227); doc.setLineWidth(0.5); doc.line(mL, y-16, mR, y-16);
+  };
+  row('Customer Name', p.customerName);
+  row('Mobile Number', p.phone);
+  row('Purchase Plan', p.plan);
+  row('Date & Time of Purchase', fmtDateTime(p.purchasedAt));
+  row('Date of Purchase', fmtDate(p.purchasedAt));
+  row('Valid Until', fmtDate(p.validUntil));
+
+  y += 14;
+  doc.setFillColor(253, 245, 243);
+  doc.roundedRect(mL, y, mR-mL, 46, 8, 8, 'F');
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(120,110,105);
+  doc.text('Amount Paid', mL+16, y+29);
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(theme[0], theme[1], theme[2]);
+  doc.text('\u20b9'+Number(p.amount||0).toLocaleString('en-IN'), mR-16, y+29, { align:'right' });
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(160,150,145);
+  doc.text('StampBook \u00b7 This is a system-generated invoice.', pageW/2, pageH-30, { align:'center' });
+  return doc;
+}
+async function downloadAdsInvoice(){
+  if(!lastAdsPurchase) return;
+  const doc = await buildAdsInvoicePDF(lastAdsPurchase);
+  doc.save('StampBook-AdsInvoice-'+lastAdsPurchase.invoiceNo+'.pdf');
 }
 
 // Platform-wide "Monthly Revenue" chart — billed totals grouped by invoice
@@ -3443,6 +3871,13 @@ function renderAdminUserDetail(){
       <div class="line">${ic('mail',14)} ${u.email}</div>
       <div class="line muted" style="font-size:11.5px;">${ic('calendar',13)} Registered ${fmtDate(u.created_at)}</div>
       <div class="line" style="margin-top:6px;"><span class="pill ${u.role==='admin'?'Sent':'Paid'}">${u.role==='admin'?'Admin':'User'}</span>${u.is_active===false?' <span class="pill Overdue">Suspended</span>':''}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);">
+        <div>
+          <div style="font-size:13px;font-weight:700;">Ads</div>
+          <div class="muted" style="font-size:11px;margin-top:2px;">${u.ads_enabled===false?'Ads are off for this user':'Ads are shown to this user'}${u.ads_off_until && new Date(u.ads_off_until)>new Date() ? ' \\u00b7 paid off until '+fmtDate(u.ads_off_until) : ''}</div>
+        </div>
+        <label class="toggle-switch"><input type="checkbox" ${u.ads_enabled!==false?'checked':''} onchange="toggleUserAdsOn('${u.id}', this.checked)"><span class="slider"></span></label>
+      </div>
     </div>
 
     <div class="section-head" style="padding-top:14px;"><h2>Login Activity</h2></div>
@@ -3565,11 +4000,75 @@ function animateNumber(el, to){
   }
   requestAnimationFrame(tick);
 }
+// ---------------- ADS ----------------
+// Placement rule: ads only ever appear on read-only browsing screens the
+// signed-in business owner is scrolling through (Home, Invoices, Clients,
+// Payments, Reports, History) — never on a form/checkout-style screen
+// (Create Invoice, Add Payment, Add Expense, Add Client, Business Settings),
+// never on auth/admin screens, and never on Invoice Detail, since that's the
+// screen a client opens from a shared link — ads there would show up in
+// front of the owner's own customers, not the owner.
+//
+// In-feed cards are inserted into list.map() output and re-pushed every
+// render (the innerHTML rewrite destroys the old <ins> each time). Static
+// bottom banners live once in the screen's HTML and are pushed exactly once
+// per <ins>, guarded by a dataset flag, since AdSense throws if you push an
+// already-filled slot again.
+function adBannerHtml(slot, insId){
+  return `<div class="px adblock-wrap" style="margin-top:18px;margin-bottom:8px;">
+    <div class="muted" style="font-size:10.5px;text-align:center;margin-bottom:4px;letter-spacing:.3px;">Advertisement</div>
+    <ins id="${insId}" class="adsbygoogle" style="display:block" data-ad-client="ca-pub-5534015246644026" data-ad-slot="${slot}" data-ad-format="auto" data-full-width-responsive="true"></ins>
+  </div>`;
+}
+function adInFeedHtml(slot, layoutKey){
+  return `<div class="card adblock-wrap" style="margin-bottom:8px;padding:10px 12px;">
+    <div class="muted" style="font-size:9.5px;text-align:center;margin-bottom:4px;letter-spacing:.3px;">Advertisement</div>
+    <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-5534015246644026" data-ad-slot="${slot}" data-ad-format="fluid" data-ad-layout-key="${layoutKey}"></ins>
+  </div>`;
+}
+function pushAdsIn(containerId){
+  if(adsCurrentlyOff()) return;
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  el.querySelectorAll('ins.adsbygoogle').forEach(()=>{
+    try{ (window.adsbygoogle = window.adsbygoogle || []).push({}); }catch(e){}
+  });
+}
+function pushStaticAdOnce(insId){
+  if(adsCurrentlyOff()) return;
+  const el = document.getElementById(insId);
+  if(!el || el.dataset.pushed) return;
+  el.dataset.pushed = '1';
+  try{ (window.adsbygoogle = window.adsbygoogle || []).push({}); }catch(e){}
+}
+
+// Sticky anchor ad — shown only on browsing screens, never on forms/checkout
+// screens or the public client-facing invoice link, and dismissible so it
+// never traps anyone.
+const ANCHOR_AD_SCREENS = ['home','invoices','clients','payments','reports','history','client-detail','invoice-detail','profile'];
+let anchorAdPushed = false;
+let anchorAdDismissed = false;
+function updateAnchorAd(name, isPublicRoute){
+  const bar = document.getElementById('anchor-ad-bar');
+  if(!bar) return;
+  const allowed = ANCHOR_AD_SCREENS.includes(name) && !isPublicRoute && !anchorAdDismissed && !adsCurrentlyOff();
+  bar.classList.toggle('show', allowed);
+  if(allowed && !anchorAdPushed){
+    anchorAdPushed = true;
+    try{ (window.adsbygoogle = window.adsbygoogle || []).push({}); }catch(e){}
+  }
+}
+function dismissAnchorAd(){
+  anchorAdDismissed = true;
+  const bar = document.getElementById('anchor-ad-bar');
+  if(bar) bar.classList.remove('show');
+}
+
 let homeAdPushed = false;
 function renderHome(){
   // AdSense needs the slot to have non-zero width, which only happens once
   // the home screen is the active (visible) one — so push here, once.
-  if(!homeAdPushed){
+  if(!homeAdPushed && !adsCurrentlyOff()){
     homeAdPushed = true;
     try{ (window.adsbygoogle = window.adsbygoogle || []).push({}); }catch(e){}
   }
@@ -3612,15 +4111,19 @@ function renderInvoices(){
   if(invFilter!=='All') list = list.filter(i=>i.status===invFilter);
   if(q) list = list.filter(i=> i.id.toLowerCase().includes(q) || (clientById(i.clientId)?.name||'').toLowerCase().includes(q));
 
-  document.getElementById('invoices-list').innerHTML = list.map(inv=>{
+  document.getElementById('invoices-list').innerHTML = list.map((inv,idx)=>{
     const c = clientById(inv.clientId);
-    return `<div class="listitem" onclick="openInvoice('${inv.id}')">
+    const card = `<div class="listitem" onclick="openInvoice('${inv.id}')">
       <div><div style="font-size:14px;font-weight:700;">${inv.id}</div>
       <div class="muted" style="font-size:12px;">${c?c.name:''}</div>
       <div class="muted" style="font-size:11px;margin-top:2px;">${fmtDate(inv.date)}</div></div>
       <div style="text-align:right;"><div style="font-size:14px;font-weight:800;">${rupee(inv.total)}</div>
       <span class="pill ${inv.status}">${inv.status}</span></div></div>`;
+    const ad = (idx>0 && (idx+1)%4===0) ? adInFeedHtml('9512343683','-fb+5w+4e-db+86') : '';
+    return card+ad;
   }).join('') || `<div class="empty">${ic('invoice',34)}No invoices found</div>`;
+  pushAdsIn('invoices-list');
+  pushStaticAdOnce('ins-invoices-banner');
 }
 function setInvFilter(f){ invFilter=f; renderInvoices(); }
 
@@ -3695,7 +4198,9 @@ function renderInvoiceDetail(){
     ${actionsHtml}
     ${cancelHtml}
     ${deleteHtml}
+    ${!publicInvoiceView ? adInFeedHtml('9975378118','-gw-3+1f-3d+2z') : ''}
   `;
+  pushAdsIn('invoice-detail-body');
 }
 // ---------------- PDF / SHARE ----------------
 // jsPDF's built-in Helvetica font has no glyph for ₹ (it silently prints
@@ -4375,15 +4880,12 @@ document.addEventListener('visibilitychange', ()=>{
   if(!upiAwaitingReturn) return;
   const { invId } = upiAwaitingReturn;
   upiAwaitingReturn = null;
-  // Same "waiting for confirmation" spinner used for Razorpay, shown briefly
-  // here too so returning from the UPI app doesn't feel abrupt — UPI has no
-  // real confirmation callback, so this is just a short pause before we ask.
-  showPaymentWaitOverlay(10);
-  setTimeout(()=>{
-    hidePaymentWaitOverlay();
-    document.getElementById('upi-confirm-pending-id').value = invId;
-    document.getElementById('upi-confirm-overlay').classList.add('active');
-  }, 10000);
+  // Ask right away whether the payment went through — the "waiting for
+  // confirmation" spinner now only appears after they say yes (see
+  // confirmUpiClaim), to mask the brief wait for the business to be
+  // notified, not before we've even asked the question.
+  document.getElementById('upi-confirm-pending-id').value = invId;
+  document.getElementById('upi-confirm-overlay').classList.add('active');
 });
 function dismissUpiConfirm(){
   document.getElementById('upi-confirm-overlay').classList.remove('active');
@@ -4391,12 +4893,23 @@ function dismissUpiConfirm(){
 async function confirmUpiClaim(){
   const invId = document.getElementById('upi-confirm-pending-id').value;
   dismissUpiConfirm();
+  // Show the "Confirming your payment" spinner for a flat 5 seconds, running
+  // it alongside the actual notify-upi-claim call rather than before it, so
+  // the customer isn't left staring at a bare screen while the request is
+  // in flight — whatever the real wait turns out to be, they feel a fixed
+  // short pause instead.
+  showPaymentWaitOverlay(5);
+  const minWait = new Promise(resolve=>setTimeout(resolve, 5000));
   try{
-    const res = await fetch(CF_FUNCTIONS_BASE + '/notify-upi-claim', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ invoice_id: invId })
-    });
+    const [res] = await Promise.all([
+      fetch(CF_FUNCTIONS_BASE + '/notify-upi-claim', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ invoice_id: invId })
+      }),
+      minWait
+    ]);
     const result = await res.json();
+    hidePaymentWaitOverlay();
     if(!res.ok || result.error){
       showToast(result.error || 'Could not reach the business — try again');
       return;
@@ -4405,6 +4918,7 @@ async function confirmUpiClaim(){
     renderInvoiceDetail();
     showToast('Thanks — the business has been notified to verify your payment');
   }catch(e){
+    hidePaymentWaitOverlay();
     showToast('Could not reach the business — try again');
   }
 }
@@ -4673,15 +5187,19 @@ async function saveInvoice(stage, btn){
 function renderClients(){
   const q = (document.getElementById('cl-search-input')?.value||'').toLowerCase();
   let list = clients.filter(c=>c.name.toLowerCase().includes(q));
-  document.getElementById('clients-list').innerHTML = list.map(c=>{
+  document.getElementById('clients-list').innerHTML = list.map((c,idx)=>{
     const s = clientStats(c.id);
-    return `<div class="listitem" onclick="openClient('${c.id}')">
+    const card = `<div class="listitem" onclick="openClient('${c.id}')">
       <div style="display:flex;align-items:center;gap:12px;"><div class="avatar" style="width:38px;height:38px;font-size:14px;">${c.name[0]}</div>
       <div><div style="font-size:14px;font-weight:700;">${c.name}</div>
       <div class="muted" style="font-size:12px;">${c.phone||''}</div></div></div>
       <div style="text-align:right;font-size:12px;color:${s.due>0?'var(--red)':'var(--muted)'};font-weight:700;">${s.due>0?'Due '+rupee(s.due):'Settled'}</div>
     </div>`;
+    const ad = (idx>0 && (idx+1)%4===0) ? adInFeedHtml('5573098675','-fb+5w+4e-db+86') : '';
+    return card+ad;
   }).join('') || `<div class="empty">${ic('users',34)}No clients found</div>`;
+  pushAdsIn('clients-list');
+  pushStaticAdOnce('ins-clients-banner');
 }
 
 async function deleteClient(clientId){
@@ -4847,8 +5365,9 @@ function renderClientDetail(){
     <button class="btn line" style="margin-top:12px;" onclick="openEditClient('${c.id}')">${ic('edit',15)} Edit Client</button>
     <button class="btn line" style="margin-top:10px;color:var(--red);border-color:var(--red-100);" onclick="deleteClient('${c.id}')">${ic('trash',15)} Delete Client</button>`;
   }
-  body += `</div><button class="btn" style="margin-top:16px;" onclick="prefillInvoiceClient('${c.id}')">${ic('plus',15)} Create Invoice</button>`;
+  body += `</div><button class="btn" style="margin-top:16px;" onclick="prefillInvoiceClient('${c.id}')">${ic('plus',15)} Create Invoice</button>${adInFeedHtml('9975378118','-gw-3+1f-3d+2z')}`;
   document.getElementById('client-detail-body').innerHTML = body;
+  pushAdsIn('client-detail-body');
 }
 function prefillInvoiceClient(clientId){
   goto('create');
@@ -4868,6 +5387,7 @@ function renderPayments(){
       <div style="font-size:14px;font-weight:800;color:var(--green);">${rupee(p.amount)}</div>
     </div>`;
   }).join('') || `<div class="empty">${ic('wallet',34)}No payments recorded</div>`;
+  pushStaticAdOnce('ins-payments-banner');
 }
 
 function renderAddPaymentScreen(){
@@ -4987,6 +5507,7 @@ function renderReports(){
   document.getElementById('rep-top').innerHTML = top.map(c=>`
     <div class="barwrap"><div class="barhead"><span class="name">${c.name}</span><span class="muted">${rupee(c.billed)}</span></div>
     <div class="bartrack"><div class="barfill" style="width:${(c.billed/max*100)}%"></div></div></div>`).join('');
+  pushStaticAdOnce('ins-reports-banner');
 
   // Date-range revenue lookup: defaults to "this month so far" the first
   // time the screen loads, but leaves the fields alone on later renders
@@ -5192,6 +5713,7 @@ function renderHistory(){
       <div class="tl-dot ${dotClass[a.bucket]||'other'}">${ic(dotIcon[a.bucket]||'receipt',13)}</div>
       <div><div class="tl-text">${a.text}</div><div class="tl-sub">${a.sub||''} · ${fmtDate(a.date)}</div></div>
     </div>`).join('') || `<div class="empty">${ic('calendar',34)}No history yet</div>`) + `</div>`;
+  pushStaticAdOnce('ins-history-banner');
 }
 function setHistFilter(f){ histFilter=f; renderHistory(); }
 
