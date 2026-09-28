@@ -571,7 +571,6 @@ function goto(name, opts){
   if(name==='home') renderHome();
   if(name==='admin-notices') fetchAdminNotices();
   if(name==='register'){ resetRegCaptcha(); }
-  if(name==='login'){ resetLoginCaptcha(); }
   if(name==='invoices') renderInvoices();
   if(name==='clients') renderClients();
   if(name==='payments') renderPayments();
@@ -3799,23 +3798,6 @@ function resetRegCaptcha(){
   }
   syncRegisterPhoneUI();
 }
-let loginCaptchaToken = null;
-function onLoginCaptchaSuccess(token){ loginCaptchaToken = token; }
-function onLoginCaptchaExpired(){ loginCaptchaToken = null; }
-function resetLoginCaptcha(){
-  loginCaptchaToken = null;
-  if(window.turnstile && document.getElementById('login-turnstile')){
-    try{ turnstile.reset('#login-turnstile'); }catch(e){}
-  }
-}
-// Invisible CAPTCHA solves in the background; wait briefly if the user is fast.
-async function waitForLoginCaptcha(timeoutMs){
-  const start = Date.now();
-  while(!loginCaptchaToken && Date.now() - start < timeoutMs){
-    await new Promise(r => setTimeout(r, 150));
-  }
-  return loginCaptchaToken;
-}
 function syncRegisterPhoneUI(){
   const input = document.getElementById('reg-phone');
   const btn = document.getElementById('reg-phone-verify-btn');
@@ -3876,19 +3858,12 @@ async function doSendLoginOtp(){
   }
   setBtnBusy('login-btn',true,'Sending OTP…');
   try{
-    const captchaToken = await waitForLoginCaptcha(10000);
-    if(!captchaToken){
-      showAuthError('login-error','Security check could not finish. Please wait a moment and try again.');
-      resetLoginCaptcha();
-      return;
-    }
     if(isPhone){
       const phone = toE164(raw);
       const {error} = await sb.auth.signInWithOtp({
           phone,
-          options:{shouldCreateUser:false, channel:'whatsapp', captchaToken}
+          options:{shouldCreateUser:false, channel:'whatsapp'}
         });
-      resetLoginCaptcha();
       if(error){
         console.error('[login phone] signInWithOtp error:', error.status, error.message, error);
         showAuthError('login-error',
@@ -3901,9 +3876,8 @@ async function doSendLoginOtp(){
       const email = raw.toLowerCase();
       const {error} = await sb.auth.signInWithOtp({
           email,
-          options:{shouldCreateUser:false, captchaToken}
+          options:{shouldCreateUser:false}
         });
-      resetLoginCaptcha();
       if(error){
         console.error('[login email] signInWithOtp error:', error.status, error.message, error);
         showAuthError('login-error',
@@ -3916,6 +3890,19 @@ async function doSendLoginOtp(){
     goto('otp');
   }finally{
     setBtnBusy('login-btn',false);
+  }
+}
+// Registration OTPs go through the `register-otp` Edge Function, which checks the
+// Turnstile CAPTCHA on the server, creates the user, and sends the WhatsApp OTP.
+// Returns {error} where error is a message string (or null on success).
+async function callRegisterOtp(payload){
+  try{
+    const {data, error} = await sb.functions.invoke('register-otp', {body: payload});
+    if(error) return {error: error.message || 'Could not reach the server. Please try again.'};
+    if(!data || data.ok !== true) return {error: (data && data.error) || 'Could not send WhatsApp OTP. Please try again.'};
+    return {error: null};
+  }catch(e){
+    return {error: (e && e.message) || 'Could not reach the server. Please try again.'};
   }
 }
 async function startRegisterPhoneVerification(){
@@ -3957,21 +3944,16 @@ async function startRegisterPhoneVerification(){
         'This email is already registered. <button class="link-inline" onclick="goto(\'login\')">Log in instead</button>');
       return;
     }
-    const {error} = await sb.auth.signInWithOtp({
-        phone,
-        options:{
-          shouldCreateUser:true,
-          channel:'whatsapp',
-          data:{name,designation,phone:phoneRaw,email},
-          captchaToken:regCaptchaToken
-        }
-      });
+    const {error: regErr} = await callRegisterOtp({
+      action:'start', phone, phoneRaw, name, designation, email,
+      captchaToken: regCaptchaToken
+    });
     resetRegCaptcha();
-    if(error){
+    if(regErr){
       showAuthError('reg-error',
-        /already|registered|exists|duplicate key|unique constraint/i.test(error.message||'')
+        /already|registered|exists|duplicate key|unique constraint/i.test(regErr)
         ? 'This WhatsApp number or email is already registered. <button class="link-inline" onclick="goto(\'login\')">Log in instead</button>'
-        : (error.message || 'Could not send WhatsApp OTP. Please try again.'));
+        : regErr);
       return;
     }
     otpContext = {
@@ -4136,11 +4118,8 @@ async function doResendOtp(){
   setBtnBusy('otp-resend-btn',true,'Resending…');
   let error=null;
   if(otpContext.purpose==='register-phone'){
-    const p=otpContext.pendingProfile;
-    ({error}=await sb.auth.signInWithOtp({
-          phone:otpContext.phone,
-          options:{shouldCreateUser:true,channel:'whatsapp',data:{name:p.name,designation:p.designation,phone:p.phone,email:p.email}}
-        }));
+    const {error: resendErr} = await callRegisterOtp({action:'resend', phone:otpContext.phone});
+    error = resendErr ? {message: resendErr} : null;
   }else if(otpContext.purpose==='login-phone'){
     ({error}=await sb.auth.signInWithOtp({
           phone:otpContext.phone,
