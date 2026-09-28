@@ -25,7 +25,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" id="app-favicon" href="" />
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=2">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
@@ -67,13 +67,6 @@
           placeholder="10-digit mobile number or email" autocomplete="username"
           oninput="syncLoginIdentifierUI()">
       </div>
-      <!-- Invisible CAPTCHA: Supabase's Bot Protection covers every Auth endpoint, so
-           login still needs a token. "interaction-only" keeps the widget hidden and
-           solves in the background; it only appears if Cloudflare needs a check. -->
-      <div id="login-turnstile" class="cf-turnstile" data-sitekey="0x4AAAAAAFE696Jg3rOkvp0j"
-        data-appearance="interaction-only" data-callback="onLoginCaptchaSuccess"
-        data-expired-callback="onLoginCaptchaExpired" data-error-callback="onLoginCaptchaExpired"></div>
-
       <button class="btn" id="login-btn" onclick="doSendLoginOtp()">Send OTP</button>
       <div class="login-note" id="login-note">A 6-digit OTP will be sent to your WhatsApp number or email.</div>
       <div class="switch-row">New here? <button onclick="goto('register')">Create an account</button></div>
@@ -1244,6 +1237,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
