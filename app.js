@@ -571,6 +571,7 @@ function goto(name, opts){
   if(name==='home') renderHome();
   if(name==='admin-notices') fetchAdminNotices();
   if(name==='register'){ resetRegCaptcha(); }
+  if(name==='login'){ resetLoginCaptcha(); }
   if(name==='invoices') renderInvoices();
   if(name==='clients') renderClients();
   if(name==='payments') renderPayments();
@@ -3798,6 +3799,23 @@ function resetRegCaptcha(){
   }
   syncRegisterPhoneUI();
 }
+let loginCaptchaToken = null;
+function onLoginCaptchaSuccess(token){ loginCaptchaToken = token; }
+function onLoginCaptchaExpired(){ loginCaptchaToken = null; }
+function resetLoginCaptcha(){
+  loginCaptchaToken = null;
+  if(window.turnstile && document.getElementById('login-turnstile')){
+    try{ turnstile.reset('#login-turnstile'); }catch(e){}
+  }
+}
+// Invisible CAPTCHA solves in the background; wait briefly if the user is fast.
+async function waitForLoginCaptcha(timeoutMs){
+  const start = Date.now();
+  while(!loginCaptchaToken && Date.now() - start < timeoutMs){
+    await new Promise(r => setTimeout(r, 150));
+  }
+  return loginCaptchaToken;
+}
 function syncRegisterPhoneUI(){
   const input = document.getElementById('reg-phone');
   const btn = document.getElementById('reg-phone-verify-btn');
@@ -3858,12 +3876,19 @@ async function doSendLoginOtp(){
   }
   setBtnBusy('login-btn',true,'Sending OTP…');
   try{
+    const captchaToken = await waitForLoginCaptcha(10000);
+    if(!captchaToken){
+      showAuthError('login-error','Security check could not finish. Please wait a moment and try again.');
+      resetLoginCaptcha();
+      return;
+    }
     if(isPhone){
       const phone = toE164(raw);
       const {error} = await sb.auth.signInWithOtp({
           phone,
-          options:{shouldCreateUser:false, channel:'whatsapp'}
+          options:{shouldCreateUser:false, channel:'whatsapp', captchaToken}
         });
+      resetLoginCaptcha();
       if(error){
         console.error('[login phone] signInWithOtp error:', error.status, error.message, error);
         showAuthError('login-error',
@@ -3876,8 +3901,9 @@ async function doSendLoginOtp(){
       const email = raw.toLowerCase();
       const {error} = await sb.auth.signInWithOtp({
           email,
-          options:{shouldCreateUser:false}
+          options:{shouldCreateUser:false, captchaToken}
         });
+      resetLoginCaptcha();
       if(error){
         console.error('[login email] signInWithOtp error:', error.status, error.message, error);
         showAuthError('login-error',
