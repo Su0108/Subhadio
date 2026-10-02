@@ -23,6 +23,7 @@ function loadQRCode(){
 function loadChartJs(){
   return loadScriptOnce('chartjs', 'https://cdn.jsdelivr.net/npm/chart.js');
 }
+const APP_MARK_SVG = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23ff9a2e%22/%3E%3Cstop offset=%221%22 stop-color=%22%23e5384b%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22url%28%23g%29%22/%3E%3Ccircle cx=%2232%22 cy=%2217%22 r=%226%22 fill=%22%23fff%22/%3E%3Cpath d=%22M27 22h10l3 12H24z%22 fill=%22%23fff%22/%3E%3Crect x=%2217%22 y=%2234%22 width=%2230%22 height=%227%22 rx=%223%22 fill=%22%23fff%22/%3E%3Crect x=%2214%22 y=%2246%22 width=%2236%22 height=%224%22 rx=%222%22 fill=%22%23fff%22 opacity=%22.85%22/%3E%3C/svg%3E";
 const LOGO_ICON_B64 = "https://res.cloudinary.com/xszjfxug/image/upload/v1790123617/stampbook_logos/bipsoao9gw4nl9zxc2ve.png";
 const LOGO_WORDMARK_B64 = "https://res.cloudinary.com/xszjfxug/image/upload/v1790123625/stampbook_logos/yonomhkmpssjqzrq7eck.png";
 const SPLASH_IMG_B64 = "https://res.cloudinary.com/xszjfxug/image/upload/v1790532417/splash-image.jpg";
@@ -453,12 +454,12 @@ function toggleLoginSupport(){
 function paintStaticChrome(){
   renderAdminMainTabs();
   document.getElementById('splash-full-img').src = SPLASH_IMG_B64;
-  document.getElementById('login-logo-img').src = LOGO_ICON_B64;
-  document.getElementById('register-logo-img').src = LOGO_ICON_B64;
-  document.getElementById('otp-logo-img').src = LOGO_ICON_B64;
-  document.getElementById('sidebar-logo-img').src = LOGO_ICON_B64;
-  document.getElementById('home-logo-img').src = LOGO_ICON_B64;
-  document.getElementById('app-favicon').href = LOGO_ICON_B64;
+  document.getElementById('login-logo-img').src = APP_MARK_SVG;
+  document.getElementById('register-logo-img').src = APP_MARK_SVG;
+  document.getElementById('otp-logo-img').src = APP_MARK_SVG;
+  document.getElementById('sidebar-logo-img').src = APP_MARK_SVG;
+  document.getElementById('home-logo-img').src = APP_MARK_SVG;
+  document.getElementById('app-favicon').href = APP_MARK_SVG;
   document.getElementById('admin-home-btn').innerHTML = ic('home',18);
   document.getElementById('admin-logout-btn').innerHTML = ic('logout',18);
   document.getElementById('admin-notices-btn').innerHTML = ic('bell',18);
@@ -1102,7 +1103,7 @@ async function buildAdsInvoicePDF(p){
   doc.text('Ad-free plan purchase', textX, hy+13);
   doc.setTextColor(theme[0], theme[1], theme[2]);
   doc.setFont('helvetica','bold'); doc.setFontSize(26);
-  doc.text('Invoice', mR, hy-3, { align:'right' });
+  doc.text('INVOICE', mR, hy-3, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(120,110,105);
   doc.text('#'+p.invoiceNo, mR, hy+15, { align:'right' });
   let y = headerH + 50;
@@ -2243,7 +2244,7 @@ async function buildInvoicePDF(invId){
   const margin = 40;
   const theme = hexToRgb(business.themeColor);
   const supportedTemplates = ['Classic','Minimal','Bold','Modern','Luxe','Editorial','Aster'];
-  const tpl = supportedTemplates.includes(business.template) ? business.template : 'Modern';
+  const tpl = supportedTemplates.includes(business.template) ? business.template : 'Classic';
   const contentInset = ['Modern','Aster'].includes(tpl) ? 16 : 0;
   const mL = margin + contentInset;
   const mR = pageW - margin - contentInset;
@@ -2278,9 +2279,6 @@ async function buildInvoicePDF(invId){
   } else {
     doc.setFillColor(theme[0], theme[1], theme[2]);
     doc.rect(0,0,pageW,headerH,'F');
-    doc.setFillColor(Math.max(theme[0]-40,0), Math.max(theme[1]-40,0), Math.max(theme[2]-40,0));
-    doc.triangle(pageW-170,0,pageW,0,pageW,headerH,'F');
-    doc.setFillColor(255,107,181); doc.rect(0,headerH,pageW,4,'F');
   }
   let logoDataUrl = LOGO_ICON_B64;
   if(business.logoUrl){
@@ -2316,7 +2314,7 @@ async function buildInvoicePDF(invId){
   if(tpl==='Luxe') doc.setTextColor(234,198,115);
   else if(!onBand) doc.setTextColor(theme[0], theme[1], theme[2]);
   doc.setFont('helvetica','bold'); doc.setFontSize(tpl==='Bold' ? 30 : (['Modern','Luxe','Aster'].includes(tpl) ? 26 : 22));
-  doc.text('Invoice', mR, hy-3, { align:'right' });
+  doc.text('INVOICE', mR, hy-3, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(11);
   if(tpl==='Luxe') doc.setTextColor(246,224,170);
   else if(!onBand) doc.setTextColor(120,110,105);
@@ -2337,7 +2335,7 @@ async function buildInvoicePDF(invId){
     y = cardY + 22;
   }
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('Billed to', mL, y);
+  doc.text('BILLED TO', mL, y);
   doc.setFont('helvetica','normal'); doc.setFontSize(11);
   doc.text(c.name || '-', mL, y+16);
   doc.setFontSize(9.5); doc.setTextColor(120,110,105);
@@ -2352,15 +2350,15 @@ async function buildInvoicePDF(invId){
   if(c.email){ doc.text(c.email, mL, cy); cy += 13; }
   if(c.gstin){ doc.text('GSTIN: '+c.gstin, mL, cy); }
   doc.setTextColor(30,25,23); doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('Issued', mR, y, { align:'right' });
+  doc.text('INVOICE DATE', mR, y, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
   doc.text(fmtDate(inv.date), mR, y+15, { align:'right' });
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('Pay by', mR, y+34, { align:'right' });
+  doc.text('DUE DATE', mR, y+34, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
   doc.text(fmtDate(inv.dueDate), mR, y+49, { align:'right' });
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('Status', mR, y+68, { align:'right' });
+  doc.text('STATUS', mR, y+68, { align:'right' });
   doc.setTextColor(theme[0], theme[1], theme[2]); doc.text(inv.status, mR, y+83, { align:'right' });
   doc.setTextColor(30,25,23);
   const rows = inv.lineItems.map(it=>[it.name, String(it.qty), pdfRupee(it.price), pdfRupee(it.qty*it.price)]);
@@ -2375,7 +2373,7 @@ async function buildInvoicePDF(invId){
   : { fillColor:[34,29,27], textColor:[255,255,255], fontStyle:'bold' };
   doc.autoTable({
       startY: Math.max(['Modern','Aster'].includes(tpl) ? y + 120 : y + 92, cy + 14),
-      head: [['Description','Qty','Unit price','Total']],
+      head: [['Item / Service','Qty','Rate','Amount']],
       body: rows,
       theme: (['Minimal','Modern','Editorial','Aster'].includes(tpl)) ? 'plain' : 'striped',
       styles:{ font:'helvetica', fontSize:10, cellPadding:8, textColor:[30,25,23] },

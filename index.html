@@ -5,7 +5,7 @@
 <!-- Google AdSense: replace ca-pub-5534015246644026 with your real AdSense publisher ID -->
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5534015246644026" crossorigin="anonymous"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>StampBook — Get paid, beautifully</title>
+<title>StampBook — Billing &amp; Invoices</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <!-- Link-preview tags for WhatsApp/Facebook/etc. WhatsApp's crawler doesn't run
      JavaScript, so this can't rely on the JS-set favicon — it needs a real,
@@ -13,20 +13,21 @@
      (so it loads at https://stampbook.shop/stampbook-logo.png) and keep the
      URL below pointed at it. Update og:url per-page if you ever want a
      specific invoice link to preview differently. -->
-<meta property="og:title" content="StampBook — Get paid, beautifully" />
+<meta property="og:title" content="StampBook — Billing &amp; Invoices" />
 <meta property="og:description" content="Create, send, and get paid for invoices — fast and simple billing for your business." />
 <meta property="og:image" content="https://stampbook.shop/stampbook-logo.png" />
 <meta property="og:url" content="https://stampbook.shop/" />
 <meta property="og:type" content="website" />
 <meta name="twitter:card" content="summary" />
-<meta name="twitter:title" content="StampBook — Get paid, beautifully" />
+<meta name="twitter:title" content="StampBook — Billing &amp; Invoices" />
 <meta name="twitter:description" content="Create, send, and get paid for invoices — fast and simple billing for your business." />
 <meta name="twitter:image" content="https://stampbook.shop/stampbook-logo.png" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="icon" id="app-favicon" href="" />
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<link rel="icon" id="app-favicon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23ff9a2e%22/%3E%3Cstop offset=%221%22 stop-color=%22%23e5384b%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22url%28%23g%29%22/%3E%3Ccircle cx=%2232%22 cy=%2217%22 r=%226%22 fill=%22%23fff%22/%3E%3Cpath d=%22M27 22h10l3 12H24z%22 fill=%22%23fff%22/%3E%3Crect x=%2217%22 y=%2234%22 width=%2230%22 height=%227%22 rx=%223%22 fill=%22%23fff%22/%3E%3Crect x=%2214%22 y=%2246%22 width=%2236%22 height=%224%22 rx=%222%22 fill=%22%23fff%22 opacity=%22.85%22/%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23ff9a2e%22/%3E%3Cstop offset=%221%22 stop-color=%22%23e5384b%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22url%28%23g%29%22/%3E%3Ccircle cx=%2232%22 cy=%2217%22 r=%226%22 fill=%22%23fff%22/%3E%3Cpath d=%22M27 22h10l3 12H24z%22 fill=%22%23fff%22/%3E%3Crect x=%2217%22 y=%2234%22 width=%2230%22 height=%227%22 rx=%223%22 fill=%22%23fff%22/%3E%3Crect x=%2214%22 y=%2246%22 width=%2236%22 height=%224%22 rx=%222%22 fill=%22%23fff%22 opacity=%22.85%22/%3E%3C/svg%3E" />
+<meta name="theme-color" content="#e5384b" />
 <link rel="stylesheet" href="style.css?v=2">
-<link rel="stylesheet" href="theme.css?v=1">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
@@ -59,8 +60,8 @@
   <div class="screen" id="screen-login">
     <div class="login-wrap">
       <div class="logo-wrap"><img src="" id="login-logo-img" alt="StampBook" /></div>
-      <h1>Hey, good to see you</h1>
-      <p>Sign in with your WhatsApp number or email</p>
+      <h1>Welcome back</h1>
+      <p>Login with your WhatsApp number or email</p>
       <div class="auth-error" id="login-error"></div>
       <div class="field">
         <label>WhatsApp Number or Email</label>
@@ -68,7 +69,7 @@
           placeholder="10-digit mobile number or email" autocomplete="username"
           oninput="syncLoginIdentifierUI()">
       </div>
-      <button class="btn" id="login-btn" onclick="doSendLoginOtp()">Get my code</button>
+      <button class="btn" id="login-btn" onclick="doSendLoginOtp()">Send OTP</button>
       <div class="login-note" id="login-note">A 6-digit OTP will be sent to your WhatsApp number or email.</div>
       <div class="switch-row">New here? <button onclick="goto('register')">Create an account</button></div>
       <div class="login-support">
@@ -94,7 +95,7 @@
   <div class="screen" id="screen-register">
     <div class="login-wrap">
       <div class="logo-wrap"><img src="" id="register-logo-img" alt="StampBook" /></div>
-      <h1>Start billing in minutes</h1>
+      <h1>Create your account</h1>
       <p>Register with your WhatsApp number</p>
       <div class="auth-error" id="reg-error"></div>
 
@@ -140,7 +141,7 @@
           data-error-callback="onRegCaptchaExpired"></div>
       </div>
 
-      <button class="btn" id="register-btn" onclick="completeRegistration()">Create my account</button>
+      <button class="btn" id="register-btn" onclick="completeRegistration()">Create Account</button>
       <div class="login-note">Complete the CAPTCHA, then phone and email verification, before creating your account.</div>
       <div class="switch-row">Already have an account? <button onclick="goto('login')">Log in</button></div>
     </div>
@@ -162,7 +163,7 @@
         <input class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*">
       </div>
       <div class="otp-devnote" id="otp-devnote"></div>
-      <button class="btn" id="otp-verify-btn" onclick="doVerifyOtp()">Confirm code</button>
+      <button class="btn" id="otp-verify-btn" onclick="doVerifyOtp()">Verify &amp; Continue</button>
       <div class="otp-resend-row">
         <span class="otp-timer" id="otp-resend-timer"></span>
         <button id="otp-resend-btn" onclick="doResendOtp()" disabled>Resend OTP</button>
@@ -433,10 +434,10 @@
 
   <!-- 5. CREATE INVOICE -->
   <div class="screen" id="screen-create">
-    <div class="topbar"><div class="backrow"><div class="iconbtn" onclick="goto('home')" id="create-back"></div><h1>New invoice</h1></div></div>
+    <div class="topbar"><div class="backrow"><div class="iconbtn" onclick="goto('home')" id="create-back"></div><h1>Create Invoice</h1></div></div>
     <div class="px">
       <div class="card" style="margin-bottom:14px;">
-        <div style="font-size:13px;font-weight:700;margin-bottom:8px;">Who is this for?</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px;">Client Information</div>
         <div id="create-client-picker">
           <div class="row">
             <div class="field" style="margin-bottom:0;">
@@ -466,7 +467,7 @@
 
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div style="font-size:13px;font-weight:700;">What you are billing</div>
+          <div style="font-size:13px;font-weight:700;">Items / Services</div>
           <button class="link" onclick="addItemRow()" id="additem-btn"></button>
         </div>
         <div id="ci-items"></div>
@@ -483,8 +484,8 @@
       </div>
 
       <div class="row" style="margin-top:16px;">
-        <button class="btn line strong" onclick="saveInvoice('draft', this)">Save draft</button>
-        <button class="btn" onclick="saveInvoice('sent', this)">Send invoice</button>
+        <button class="btn line strong" onclick="saveInvoice('draft', this)">Save as Draft</button>
+        <button class="btn" onclick="saveInvoice('sent', this)">Save &amp; Send</button>
       </div>
     </div>
   </div>
@@ -499,7 +500,7 @@
       <div class="field"><label>Address</label><input id="ac-address"></div>
       <div class="field"><label>GSTIN (Optional)</label><input id="ac-gstin"></div>
       <div class="field"><label>Notes (Optional)</label><textarea id="ac-notes" rows="3"></textarea></div>
-      <button class="btn" id="addclient-savebtn" onclick="saveClient(this)">Save client</button>
+      <button class="btn" id="addclient-savebtn" onclick="saveClient(this)">Save Client</button>
     </div>
   </div>
 
@@ -1096,7 +1097,7 @@
 <div class="modal-overlay" id="plus-overlay" onclick="if(event.target===this) closePlusSheet()">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h3>What would you like to add?</h3>
+    <h3>Create New</h3>
     <div id="plus-options"></div>
   </div>
 </div>
@@ -1239,6 +1240,5 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="app.js?v=2"></script>
-<script src="fx.js?v=1"></script>
 </body>
 </html>
