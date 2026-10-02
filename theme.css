@@ -1,0 +1,55 @@
+/* StampBook — Aurora theme (layered over style.css) */
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&display=swap');
+:root{
+  --red:#5B4BFF;--red-dark:#3F2FD6;--red-50:#EEECFF;--red-100:#DDD9FF;
+  --ink:#1B1740;--muted:#7A76A3;--line:#E6E3FA;--bg:#F4F2FF;--card:#fff;
+  --green:#0FB586;--green-50:#E2FAF2;--green-200:#A8EBD3;
+  --amber:#F59E0B;--amber-50:#FFF4DC;--amber-200:#FCD98A;
+  --blue:#2F8CFF;--blue-50:#E5F1FF;--blue-200:#B8D8FF;
+  --orange:#FF6B6B;--orange-50:#FFECEC;--orange-200:#FFC4C4;
+  --grad:linear-gradient(135deg,#5B4BFF 0%,#9B5CFF 55%,#FF6BB5 100%);
+  --ease:cubic-bezier(.22,1.2,.36,1);
+}
+body{font-family:'Manrope',sans-serif;background:
+  radial-gradient(900px 500px at 8% -10%,#E3DDFF 0,transparent 60%),
+  radial-gradient(700px 400px at 100% 10%,#FFE0F0 0,transparent 55%),var(--bg);color:var(--ink)}
+h1,h2,h3,.topbar h1,.brand b,.stat .v,.sheet h3{font-family:'Sora','Manrope',sans-serif;letter-spacing:-.02em}
+.card,.listitem,.stat,.sheet-opt,.menurow{background:rgba(255,255,255,.82);backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.9);border-radius:20px;
+  box-shadow:0 1px 0 #fff inset,0 10px 30px -12px rgba(91,75,255,.28);
+  transition:transform .35s var(--ease),box-shadow .35s;transform-style:preserve-3d;will-change:transform}
+.card:hover,.listitem:hover,.stat:hover{box-shadow:0 22px 44px -16px rgba(91,75,255,.4)}
+.listitem:active,.menurow:active,.sheet-opt:active{transform:scale(.97)}
+.btn{background:var(--grad);color:#fff;border:0;border-radius:16px;font-weight:800;position:relative;overflow:hidden;
+  box-shadow:0 6px 0 #3F2FD6,0 14px 24px -8px rgba(91,75,255,.55);
+  transition:transform .18s var(--ease),box-shadow .18s,filter .2s}
+.btn:hover{transform:translateY(-2px);filter:saturate(1.15)}
+.btn:active{transform:translateY(5px);box-shadow:0 1px 0 #3F2FD6,0 4px 10px -4px rgba(91,75,255,.5)}
+.btn.line,.btn.ghost{background:#fff;color:var(--red);box-shadow:0 4px 0 var(--red-100);border:1.5px solid var(--red-100)}
+.btn.line:active,.btn.ghost:active{box-shadow:0 0 0 var(--red-100)}
+.iconbtn{border-radius:14px;transition:transform .25s var(--ease),background .2s}
+.iconbtn:hover{transform:translateY(-2px) rotate(-6deg)}.iconbtn:active{transform:scale(.88)}
+.iconbtn.solid{background:var(--grad);color:#fff}
+.chip{border-radius:999px;border:1.5px solid var(--line);background:#fff;transition:all .3s var(--ease)}
+.chip:hover{transform:translateY(-2px)}
+.chip.active{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 8px 18px -6px rgba(91,75,255,.6);transform:scale(1.05)}
+.fab{background:var(--grad);box-shadow:0 10px 0 -2px #3F2FD6,0 18px 30px -8px rgba(91,75,255,.6);
+  animation:fabfloat 3s ease-in-out infinite;transition:transform .3s var(--ease)}
+.fab:hover{transform:scale(1.12) rotate(90deg)}.fab:active{transform:scale(.9)}
+@keyframes fabfloat{50%{translate:0 -5px}}
+.navbtn{transition:transform .3s var(--ease),color .2s}.navbtn:hover{transform:translateY(-3px)}
+.navbtn.active{color:var(--red);transform:translateY(-4px) scale(1.12)}
+.field input,.field select,.field textarea{border-radius:14px;border:1.5px solid var(--line);background:#fff;transition:border-color .2s,box-shadow .25s,transform .25s var(--ease)}
+.field input:focus,.field select:focus,.field textarea:focus{outline:0;border-color:var(--red);box-shadow:0 0 0 5px rgba(91,75,255,.15);transform:translateY(-1px)}
+.sidebar{background:rgba(255,255,255,.7);backdrop-filter:blur(14px);border-right:1px solid var(--line)}
+.screen.active{animation:scr .5s var(--ease)}
+@keyframes scr{from{opacity:0;transform:translateY(18px) scale(.985)}}
+.sheet{border-radius:28px 28px 0 0;animation:sheetup .45s var(--ease)}
+@keyframes sheetup{from{transform:translateY(60px) rotateX(12deg);opacity:0}}
+.modal-overlay{backdrop-filter:blur(6px)}
+.fx-in{animation:fxin .55s var(--ease) both;animation-delay:calc(var(--i,0)*55ms)}
+@keyframes fxin{from{opacity:0;transform:translateY(22px) rotateX(-10deg)}}
+.fx-ripple{position:absolute;border-radius:50%;background:rgba(255,255,255,.55);transform:scale(0);animation:rip .6s ease-out;pointer-events:none}
+@keyframes rip{to{transform:scale(1);opacity:0}}
+.toggle-switch .slider{transition:background .3s}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
