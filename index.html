@@ -22,11 +22,9 @@
 <meta name="twitter:title" content="StampBook — Billing &amp; Invoices" />
 <meta name="twitter:description" content="Create, send, and get paid for invoices — fast and simple billing for your business." />
 <meta name="twitter:image" content="https://stampbook.shop/stampbook-logo.png" />
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet">
-<link rel="icon" id="app-favicon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23ff9a2e%22/%3E%3Cstop offset=%221%22 stop-color=%22%23e5384b%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22url%28%23g%29%22/%3E%3Ccircle cx=%2232%22 cy=%2217%22 r=%226%22 fill=%22%23fff%22/%3E%3Cpath d=%22M27 22h10l3 12H24z%22 fill=%22%23fff%22/%3E%3Crect x=%2217%22 y=%2234%22 width=%2230%22 height=%227%22 rx=%223%22 fill=%22%23fff%22/%3E%3Crect x=%2214%22 y=%2246%22 width=%2236%22 height=%224%22 rx=%222%22 fill=%22%23fff%22 opacity=%22.85%22/%3E%3C/svg%3E" />
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23ff9a2e%22/%3E%3Cstop offset=%221%22 stop-color=%22%23e5384b%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22url%28%23g%29%22/%3E%3Ccircle cx=%2232%22 cy=%2217%22 r=%226%22 fill=%22%23fff%22/%3E%3Cpath d=%22M27 22h10l3 12H24z%22 fill=%22%23fff%22/%3E%3Crect x=%2217%22 y=%2234%22 width=%2230%22 height=%227%22 rx=%223%22 fill=%22%23fff%22/%3E%3Crect x=%2214%22 y=%2246%22 width=%2236%22 height=%224%22 rx=%222%22 fill=%22%23fff%22 opacity=%22.85%22/%3E%3C/svg%3E" />
-<meta name="theme-color" content="#e5384b" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" id="app-favicon" href="" />
 <link rel="stylesheet" href="style.css?v=2">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
@@ -485,7 +483,7 @@
 
       <div class="row" style="margin-top:16px;">
         <button class="btn line strong" onclick="saveInvoice('draft', this)">Save as Draft</button>
-        <button class="btn" onclick="saveInvoice('sent', this)">Save &amp; Send</button>
+        <button class="btn" onclick="saveInvoice('sent', this)">Save &amp; Mark as Sent</button>
       </div>
     </div>
   </div>
@@ -686,7 +684,7 @@
         <div class="field"><label>Account Number</label><input id="biz-account"></div>
         <div class="field"><label>IFSC Code</label><input id="biz-ifsc"></div>
       </div>
-      <div class="field"><label>UPI ID</label><input id="biz-upi"></div>
+      <div class="field"><label>Merchant UPI ID</label><input id="biz-upi" placeholder="yourshop@bankname" autocapitalize="off" autocomplete="off" spellcheck="false"><div class="muted" style="font-size:11px;margin-top:4px;">Enter your business (merchant) UPI ID only.</div></div>
       <div class="row">
         <div class="field"><label>Invoice Prefix</label><input id="biz-prefix"></div>
         <div class="field"><label>Next Invoice No.</label><input id="biz-nextno" type="number"></div>
@@ -699,6 +697,7 @@
         <select id="biz-template">
           <option>Classic</option><option>Minimal</option><option>Bold</option><option>Modern</option>
           <option>Luxe</option><option>Editorial</option><option>Aster</option>
+          <option>Ledger</option><option>Stamp</option><option>Spine</option>
         </select>
       </div>
 
@@ -753,7 +752,7 @@
           <select id="pg-gateway" onchange="renderGatewayFields()">
             <option value="">None (offline payments only)</option>
             <option value="razorpay">Razorpay</option>
-            <option value="upi">UPI ID</option>
+            <option value="upi">Merchant UPI ID</option>
           </select>
         </div>
 

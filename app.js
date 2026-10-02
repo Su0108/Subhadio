@@ -23,7 +23,6 @@ function loadQRCode(){
 function loadChartJs(){
   return loadScriptOnce('chartjs', 'https://cdn.jsdelivr.net/npm/chart.js');
 }
-const APP_MARK_SVG = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23ff9a2e%22/%3E%3Cstop offset=%221%22 stop-color=%22%23e5384b%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22url%28%23g%29%22/%3E%3Ccircle cx=%2232%22 cy=%2217%22 r=%226%22 fill=%22%23fff%22/%3E%3Cpath d=%22M27 22h10l3 12H24z%22 fill=%22%23fff%22/%3E%3Crect x=%2217%22 y=%2234%22 width=%2230%22 height=%227%22 rx=%223%22 fill=%22%23fff%22/%3E%3Crect x=%2214%22 y=%2246%22 width=%2236%22 height=%224%22 rx=%222%22 fill=%22%23fff%22 opacity=%22.85%22/%3E%3C/svg%3E";
 const LOGO_ICON_B64 = "https://res.cloudinary.com/xszjfxug/image/upload/v1790123617/stampbook_logos/bipsoao9gw4nl9zxc2ve.png";
 const LOGO_WORDMARK_B64 = "https://res.cloudinary.com/xszjfxug/image/upload/v1790123625/stampbook_logos/yonomhkmpssjqzrq7eck.png";
 const SPLASH_IMG_B64 = "https://res.cloudinary.com/xszjfxug/image/upload/v1790532417/splash-image.jpg";
@@ -454,12 +453,12 @@ function toggleLoginSupport(){
 function paintStaticChrome(){
   renderAdminMainTabs();
   document.getElementById('splash-full-img').src = SPLASH_IMG_B64;
-  document.getElementById('login-logo-img').src = APP_MARK_SVG;
-  document.getElementById('register-logo-img').src = APP_MARK_SVG;
-  document.getElementById('otp-logo-img').src = APP_MARK_SVG;
-  document.getElementById('sidebar-logo-img').src = APP_MARK_SVG;
-  document.getElementById('home-logo-img').src = APP_MARK_SVG;
-  document.getElementById('app-favicon').href = APP_MARK_SVG;
+  document.getElementById('login-logo-img').src = LOGO_ICON_B64;
+  document.getElementById('register-logo-img').src = LOGO_ICON_B64;
+  document.getElementById('otp-logo-img').src = LOGO_ICON_B64;
+  document.getElementById('sidebar-logo-img').src = LOGO_ICON_B64;
+  document.getElementById('home-logo-img').src = LOGO_ICON_B64;
+  document.getElementById('app-favicon').href = LOGO_ICON_B64;
   document.getElementById('admin-home-btn').innerHTML = ic('home',18);
   document.getElementById('admin-logout-btn').innerHTML = ic('logout',18);
   document.getElementById('admin-notices-btn').innerHTML = ic('bell',18);
@@ -2210,6 +2209,14 @@ function showToast(msg){
   clearTimeout(toastTimer);
   toastTimer = setTimeout(()=> t.classList.remove('show'), 2400);
 }
+// Merchant UPI ID format check: handle@psp (e.g. shopname@okaxis, 9876543210@ybl).
+// Number-based IDs are allowed because many merchants use them.
+function isMerchantUpiId(v){
+  v = (v||'').trim();
+  if(!/^[a-zA-Z0-9][a-zA-Z0-9.\-_]{1,255}@[a-zA-Z][a-zA-Z0-9]{2,63}$/.test(v)) return false;
+  return true;
+}
+const MERCHANT_UPI_MSG = 'Please enter a valid merchant UPI ID (e.g. yourshop@bankname). Only the merchant UPI ID of your business can be used.';
 async function buildUpiQrDataUrl(upiId, payeeName, amount, invoiceId){
   try{
     await loadQRCode();
@@ -2243,14 +2250,16 @@ async function buildInvoicePDF(invId){
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 40;
   const theme = hexToRgb(business.themeColor);
-  const supportedTemplates = ['Classic','Minimal','Bold','Modern','Luxe','Editorial','Aster'];
+  const supportedTemplates = ['Classic','Minimal','Bold','Modern','Luxe','Editorial','Aster','Ledger','Stamp','Spine'];
   const tpl = supportedTemplates.includes(business.template) ? business.template : 'Classic';
-  const contentInset = ['Modern','Aster'].includes(tpl) ? 16 : 0;
+  const contentInset = ['Modern','Aster'].includes(tpl) ? 16 : (tpl==='Spine' ? 44 : 0);
+  const plainTpl = ['Minimal','Modern','Editorial','Aster','Ledger','Stamp','Spine'];
+  const tf = tpl==='Ledger' ? 'times' : 'helvetica';
   const mL = margin + contentInset;
   const mR = pageW - margin - contentInset;
   const headerH = tpl==='Bold' ? 110
-  : (['Modern','Luxe','Aster'].includes(tpl) ? 100
-    : (tpl==='Editorial' ? 96 : 90));
+  : (['Modern','Luxe','Aster','Spine'].includes(tpl) ? 100
+    : (['Editorial','Ledger','Stamp'].includes(tpl) ? 96 : 90));
   const hy = headerH/2;
   const pageHfull = doc.internal.pageSize.getHeight();
   if(tpl==='Minimal'){
@@ -2276,6 +2285,27 @@ async function buildInvoicePDF(invId){
     doc.setDrawColor(theme[0], theme[1], theme[2]); doc.setLineWidth(2.2);
     doc.line(mL+92, 22, mR, 22);
     doc.setLineWidth(0.2);
+  } else if(tpl==='Ledger'){
+    doc.setFillColor(243,247,241); doc.rect(0,0,pageW,pageHfull,'F');
+    doc.setDrawColor(theme[0], theme[1], theme[2]); doc.setLineWidth(0.8);
+    doc.line(mL-14, 0, mL-14, pageHfull);
+    doc.setDrawColor(34,29,27); doc.setLineWidth(1.6); doc.line(mL, headerH-8, mR, headerH-8);
+    doc.setLineWidth(0.5); doc.line(mL, headerH-3, mR, headerH-3);
+    doc.setLineWidth(0.2);
+  } else if(tpl==='Stamp'){
+    doc.setDrawColor(theme[0], theme[1], theme[2]);
+    doc.setLineWidth(2.4); doc.rect(26, 14, pageW-52, pageHfull-28);
+    doc.setLineWidth(0.6); doc.rect(31, 19, pageW-62, pageHfull-38);
+    doc.setLineWidth(0.2);
+  } else if(tpl==='Spine'){
+    doc.setFillColor(theme[0], theme[1], theme[2]);
+    doc.rect(0,0,58,pageHfull,'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold'); doc.setFontSize(22);
+    const spineStatus = String(inv.status||'').toUpperCase();
+    doc.text(spineStatus, 36, pageHfull-44, { angle:90 });
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.text('Due '+fmtDate(inv.dueDate), 34, pageHfull-44-doc.getTextWidth(spineStatus)*2.1-18, { angle:90 });
   } else {
     doc.setFillColor(theme[0], theme[1], theme[2]);
     doc.rect(0,0,pageW,headerH,'F');
@@ -2306,14 +2336,14 @@ async function buildInvoicePDF(invId){
   }
   const onBand = ['Classic','Bold','Luxe'].includes(tpl);
   if(onBand) doc.setTextColor(255,255,255); else doc.setTextColor(30,25,23);
-  doc.setFont('helvetica','bold'); doc.setFontSize(20);
+  doc.setFont(tf,'bold'); doc.setFontSize(20);
   doc.text(business.name || 'StampBook', mL+46, hy-5);
   doc.setFont('helvetica','normal'); doc.setFontSize(10);
   if(!onBand) doc.setTextColor(120,110,105);
   doc.text(business.address || '', mL+46, hy+13, { maxWidth: Math.max(120, mR-(mL+46)-150) });
   if(tpl==='Luxe') doc.setTextColor(234,198,115);
   else if(!onBand) doc.setTextColor(theme[0], theme[1], theme[2]);
-  doc.setFont('helvetica','bold'); doc.setFontSize(tpl==='Bold' ? 30 : (['Modern','Luxe','Aster'].includes(tpl) ? 26 : 22));
+  doc.setFont(tf, tpl==='Ledger' ? 'bolditalic' : 'bold'); doc.setFontSize(['Bold','Ledger'].includes(tpl) ? 30 : (['Modern','Luxe','Aster','Spine'].includes(tpl) ? 26 : 22));
   doc.text('INVOICE', mR, hy-3, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(11);
   if(tpl==='Luxe') doc.setTextColor(246,224,170);
@@ -2361,6 +2391,19 @@ async function buildInvoicePDF(invId){
   doc.text('STATUS', mR, y+68, { align:'right' });
   doc.setTextColor(theme[0], theme[1], theme[2]); doc.text(inv.status, mR, y+83, { align:'right' });
   doc.setTextColor(30,25,23);
+  if(tpl==='Stamp'){
+    const sc = inv.status==='Paid' ? [14,143,92] : theme;
+    const scx = pageW/2+70, scy = y+42, ang = 14, rad = ang*Math.PI/180;
+    doc.setDrawColor(sc[0],sc[1],sc[2]);
+    doc.setLineWidth(2.2); doc.circle(scx, scy, 33);
+    doc.setLineWidth(0.6); doc.circle(scx, scy, 28);
+    doc.setLineWidth(0.2);
+    const st = String(inv.status||'').toUpperCase();
+    doc.setFont('courier','bold'); doc.setFontSize(st.length>6 ? 10 : 13); doc.setTextColor(sc[0],sc[1],sc[2]);
+    const tw = doc.getTextWidth(st);
+    doc.text(st, scx-(tw/2)*Math.cos(rad)+3*Math.sin(rad), scy+(tw/2)*Math.sin(rad)+3*Math.cos(rad), { angle:ang });
+    doc.setTextColor(30,25,23);
+  }
   const rows = inv.lineItems.map(it=>[it.name, String(it.qty), pdfRupee(it.price), pdfRupee(it.qty*it.price)]);
   const tblHead = tpl==='Minimal'
   ? { fillColor:[244,241,238], textColor:[30,25,23], fontStyle:'bold' }
@@ -2368,17 +2411,19 @@ async function buildInvoicePDF(invId){
   ? { fillColor:[theme[0],theme[1],theme[2]], textColor:[255,255,255], fontStyle:'bold' }
   : tpl==='Luxe'
   ? { fillColor:[214,170,83], textColor:[31,28,27], fontStyle:'bold' }
-  : ['Modern','Editorial','Aster'].includes(tpl)
+  : tpl==='Ledger'
+  ? { fillColor:false, textColor:[34,29,27], fontStyle:'bold', font:'times', lineWidth:{top:1.2,bottom:1.2}, lineColor:[34,29,27] }
+  : ['Modern','Editorial','Aster','Stamp','Spine'].includes(tpl)
   ? { fillColor:[255,255,255], textColor:[theme[0],theme[1],theme[2]], fontStyle:'bold', lineWidth:{bottom:1.2}, lineColor:[theme[0],theme[1],theme[2]] }
   : { fillColor:[34,29,27], textColor:[255,255,255], fontStyle:'bold' };
   doc.autoTable({
       startY: Math.max(['Modern','Aster'].includes(tpl) ? y + 120 : y + 92, cy + 14),
       head: [['Item / Service','Qty','Rate','Amount']],
       body: rows,
-      theme: (['Minimal','Modern','Editorial','Aster'].includes(tpl)) ? 'plain' : 'striped',
-      styles:{ font:'helvetica', fontSize:10, cellPadding:8, textColor:[30,25,23] },
+      theme: (plainTpl.includes(tpl)) ? 'plain' : 'striped',
+      styles:{ font: tpl==='Stamp' ? 'courier' : tf, fontSize:10, cellPadding:8, textColor:[30,25,23] },
       headStyles: tblHead,
-      alternateRowStyles: (['Minimal','Modern','Editorial','Aster'].includes(tpl)) ? {} : { fillColor:[251,248,245] },
+      alternateRowStyles: (plainTpl.includes(tpl)) ? {} : { fillColor:[251,248,245] },
       columnStyles:{ 1:{halign:'center',cellWidth:50}, 2:{halign:'right',cellWidth:90}, 3:{halign:'right',cellWidth:100} },
       margin:{ left:mL, right:pageW-mR },
       didParseCell: function(d){
@@ -2388,7 +2433,7 @@ async function buildInvoicePDF(invId){
         }
       },
       didDrawCell: function(d){
-        if((['Minimal','Modern','Editorial','Aster'].includes(tpl)) && d.section==='body'){
+        if((plainTpl.includes(tpl)) && d.section==='body'){
           const lineColor = tpl==='Aster' ? [205,228,224] : [230,222,216];
           doc.setDrawColor(lineColor[0],lineColor[1],lineColor[2]); doc.setLineWidth(0.5);
           doc.line(d.cell.x, d.cell.y+d.cell.height, d.cell.x+d.cell.width, d.cell.y+d.cell.height);
@@ -2422,8 +2467,16 @@ async function buildInvoicePDF(invId){
     doc.text('Balance Due', totalsX-150, ty+2);
     doc.text(pdfRupee(inv.due), totalsX-8, ty+2, { align:'right' });
     ty += 28;
-  } else if(tpl==='Modern' || tpl==='Aster'){
+  } else if(tpl==='Ledger'){
+    ty += 4;
+    doc.setFont('times','bold'); doc.setFontSize(13); doc.setTextColor(34,29,27);
+    doc.text('Balance Due', totalsX-150, ty); doc.text(pdfRupee(inv.due), totalsX, ty, { align:'right' });
+    doc.setDrawColor(34,29,27); doc.setLineWidth(0.7);
+    doc.line(totalsX-150, ty+5, totalsX, ty+5); doc.line(totalsX-150, ty+8, totalsX, ty+8);
+    doc.setLineWidth(0.2); ty += 26;
+  } else if(['Modern','Aster','Spine','Stamp'].includes(tpl)){
     ty += 6;
+    if(tpl==='Stamp') doc.setLineDashPattern([4,2.5],0);
     if(tpl==='Aster'){
       doc.setFillColor(241,248,247); doc.setDrawColor(theme[0], theme[1], theme[2]); doc.setLineWidth(1.2);
       doc.roundedRect(totalsX-160, ty-15, 160, 26, 5, 5, 'FD');
@@ -2431,7 +2484,7 @@ async function buildInvoicePDF(invId){
       doc.setDrawColor(theme[0], theme[1], theme[2]); doc.setLineWidth(1.2);
       doc.roundedRect(totalsX-160, ty-15, 160, 26, 5, 5, 'D');
     }
-    doc.setLineWidth(0.2);
+    doc.setLineWidth(0.2); doc.setLineDashPattern([],0);
     doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(theme[0], theme[1], theme[2]);
     doc.text('Balance Due', totalsX-150, ty+2);
     doc.text(pdfRupee(inv.due), totalsX-8, ty+2, { align:'right' });
@@ -2440,17 +2493,18 @@ async function buildInvoicePDF(invId){
     totalLine('Balance Due', pdfRupee(inv.due), true, theme);
   }
   ty += 14;
-  if(business.upi || business.account){
+  const merchantUpi = isMerchantUpiId(business.upi) ? business.upi.trim() : '';
+  if(merchantUpi || business.account){
     const detailsStartY = ty;
     doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(30,25,23);
     doc.text('Payment Details', mL, ty); ty += 15;
     doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(100,92,88);
     if(business.bankName) { doc.text('Bank: '+business.bankName, mL, ty); ty+=13; }
     if(business.account) { doc.text('A/C: '+business.account+(business.ifsc?'  ·  IFSC: '+business.ifsc:''), mL, ty); ty+=13; }
-    if(business.upi) { doc.text('UPI: '+business.upi, mL, ty); ty+=13; }
-    if(business.upi && inv.due>0){
+    if(merchantUpi) { doc.text('UPI: '+merchantUpi, mL, ty); ty+=13; }
+    if(merchantUpi && inv.due>0){
       const qrAmount = inv.due.toFixed(2);
-      const qrDataUrl = await buildUpiQrDataUrl(business.upi, business.name||'StampBook', qrAmount, inv.id);
+      const qrDataUrl = await buildUpiQrDataUrl(merchantUpi, business.name||'StampBook', qrAmount, inv.id);
       if(qrDataUrl){
         const qrSize = 78;
         const boxWidth = 128;
@@ -2470,6 +2524,23 @@ async function buildInvoicePDF(invId){
           doc.text(pdfRupee(qrAmount), boxLeft+boxWidth/2, qrY+qrSize+25, { align:'center' });
         }catch(e){}
       }
+    }
+  }
+  if(tpl==='Stamp'){
+    const sy = pageHfull-124;
+    if(ty+70 < sy){
+      doc.setDrawColor(theme[0], theme[1], theme[2]); doc.setLineWidth(0.8); doc.setLineDashPattern([5,3],0);
+      doc.line(26, sy, pageW-26, sy);
+      doc.setLineDashPattern([],0); doc.setLineWidth(0.2);
+      doc.setFont('courier','normal'); doc.setFontSize(8.5); doc.setTextColor(120,110,105);
+      doc.text('tear here and send with payment', pageW/2, sy-5, { align:'center' });
+      doc.setFont('courier','bold'); doc.setFontSize(10.5); doc.setTextColor(30,25,23);
+      doc.text('Invoice '+inv.id, mL, sy+20);
+      doc.setFont('courier','normal'); doc.setFontSize(9.5);
+      doc.text(c.name || '-', mL, sy+35);
+      doc.text('Due '+fmtDate(inv.dueDate), mL, sy+49);
+      doc.setFont('courier','bold'); doc.setFontSize(18); doc.setTextColor(theme[0], theme[1], theme[2]);
+      doc.text(pdfRupee(inv.due), mR, sy+38, { align:'right' });
     }
   }
   if(business.terms){
@@ -2591,6 +2662,7 @@ function payViaUpi(invId, btn){
   const biz = publicBusinessData || business;
   const upiId = biz && biz.upi;
   if(!upiId){ showToast('This business has not set up a UPI ID yet'); return; }
+  if(!isMerchantUpiId(upiId)){ showToast('This business has not set up a valid merchant UPI ID'); return; }
   const upiUri = 'upi://pay?pa='+encodeURIComponent(upiId)
   +'&pn='+encodeURIComponent(biz.name || 'StampBook')
   +'&am='+encodeURIComponent(inv.due)
@@ -3527,6 +3599,7 @@ function hexToRgb(hex){
   return [(n>>16)&255, (n>>8)&255, n&255];
 }
 function saveBusiness(){
+  { const _u = document.getElementById('biz-upi').value.trim(); if(_u && !isMerchantUpiId(_u)){ alert(MERCHANT_UPI_MSG); return; } }
   business.name = document.getElementById('biz-name').value.trim() || business.name;
   business.address = document.getElementById('biz-address').value;
   business.gstin = document.getElementById('biz-gstin').value;
@@ -3534,7 +3607,7 @@ function saveBusiness(){
   business.bankName = document.getElementById('biz-bankname').value;
   business.account = document.getElementById('biz-account').value;
   business.ifsc = document.getElementById('biz-ifsc').value;
-  business.upi = document.getElementById('biz-upi').value;
+  business.upi = document.getElementById('biz-upi').value.trim();
   business.prefix = document.getElementById('biz-prefix').value.trim() || business.prefix;
   business.nextNo = Number(document.getElementById('biz-nextno').value||business.nextNo);
   business.tax = Number(document.getElementById('biz-tax').value||0);
@@ -3553,7 +3626,7 @@ function renderGatewayFields(){
   if(g==='upi' && note){
     note.innerHTML = business.upi
     ? `Uses your UPI ID (<strong>${business.upi}</strong>) from Business Settings above. Tapping "Pay Online" opens the client's UPI app directly with the amount filled in — no Razorpay account needed.`
-    : `Add a UPI ID in Business Settings above first, then come back and save this.`;
+    : `Add a merchant UPI ID in Business Settings above first, then come back and save this.`;
   }
 }
 async function renderPaymentGatewaySettings(){
@@ -3588,7 +3661,11 @@ async function savePaymentGatewaySettings(){
     return;
   }
   if(activeGateway === 'upi' && !document.getElementById('biz-upi').value.trim()){
-    alert('Add a UPI ID in Business Settings above before making it the active gateway.');
+    alert('Add a merchant UPI ID in Business Settings above before making it the active gateway.');
+    return;
+  }
+  if(activeGateway === 'upi' && !isMerchantUpiId(document.getElementById('biz-upi').value)){
+    alert(MERCHANT_UPI_MSG);
     return;
   }
   const { error: pgError } = await sb.from('payment_gateway_settings').upsert({
