@@ -1102,7 +1102,7 @@ async function buildAdsInvoicePDF(p){
   doc.text('Ad-free plan purchase', textX, hy+13);
   doc.setTextColor(theme[0], theme[1], theme[2]);
   doc.setFont('helvetica','bold'); doc.setFontSize(26);
-  doc.text('INVOICE', mR, hy-3, { align:'right' });
+  doc.text('Invoice', mR, hy-3, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(120,110,105);
   doc.text('#'+p.invoiceNo, mR, hy+15, { align:'right' });
   let y = headerH + 50;
@@ -2243,7 +2243,7 @@ async function buildInvoicePDF(invId){
   const margin = 40;
   const theme = hexToRgb(business.themeColor);
   const supportedTemplates = ['Classic','Minimal','Bold','Modern','Luxe','Editorial','Aster'];
-  const tpl = supportedTemplates.includes(business.template) ? business.template : 'Classic';
+  const tpl = supportedTemplates.includes(business.template) ? business.template : 'Modern';
   const contentInset = ['Modern','Aster'].includes(tpl) ? 16 : 0;
   const mL = margin + contentInset;
   const mR = pageW - margin - contentInset;
@@ -2278,6 +2278,9 @@ async function buildInvoicePDF(invId){
   } else {
     doc.setFillColor(theme[0], theme[1], theme[2]);
     doc.rect(0,0,pageW,headerH,'F');
+    doc.setFillColor(Math.max(theme[0]-40,0), Math.max(theme[1]-40,0), Math.max(theme[2]-40,0));
+    doc.triangle(pageW-170,0,pageW,0,pageW,headerH,'F');
+    doc.setFillColor(255,107,181); doc.rect(0,headerH,pageW,4,'F');
   }
   let logoDataUrl = LOGO_ICON_B64;
   if(business.logoUrl){
@@ -2313,7 +2316,7 @@ async function buildInvoicePDF(invId){
   if(tpl==='Luxe') doc.setTextColor(234,198,115);
   else if(!onBand) doc.setTextColor(theme[0], theme[1], theme[2]);
   doc.setFont('helvetica','bold'); doc.setFontSize(tpl==='Bold' ? 30 : (['Modern','Luxe','Aster'].includes(tpl) ? 26 : 22));
-  doc.text('INVOICE', mR, hy-3, { align:'right' });
+  doc.text('Invoice', mR, hy-3, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(11);
   if(tpl==='Luxe') doc.setTextColor(246,224,170);
   else if(!onBand) doc.setTextColor(120,110,105);
@@ -2334,7 +2337,7 @@ async function buildInvoicePDF(invId){
     y = cardY + 22;
   }
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('BILLED TO', mL, y);
+  doc.text('Billed to', mL, y);
   doc.setFont('helvetica','normal'); doc.setFontSize(11);
   doc.text(c.name || '-', mL, y+16);
   doc.setFontSize(9.5); doc.setTextColor(120,110,105);
@@ -2349,15 +2352,15 @@ async function buildInvoicePDF(invId){
   if(c.email){ doc.text(c.email, mL, cy); cy += 13; }
   if(c.gstin){ doc.text('GSTIN: '+c.gstin, mL, cy); }
   doc.setTextColor(30,25,23); doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('INVOICE DATE', mR, y, { align:'right' });
+  doc.text('Issued', mR, y, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
   doc.text(fmtDate(inv.date), mR, y+15, { align:'right' });
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('DUE DATE', mR, y+34, { align:'right' });
+  doc.text('Pay by', mR, y+34, { align:'right' });
   doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
   doc.text(fmtDate(inv.dueDate), mR, y+49, { align:'right' });
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
-  doc.text('STATUS', mR, y+68, { align:'right' });
+  doc.text('Status', mR, y+68, { align:'right' });
   doc.setTextColor(theme[0], theme[1], theme[2]); doc.text(inv.status, mR, y+83, { align:'right' });
   doc.setTextColor(30,25,23);
   const rows = inv.lineItems.map(it=>[it.name, String(it.qty), pdfRupee(it.price), pdfRupee(it.qty*it.price)]);
@@ -2372,7 +2375,7 @@ async function buildInvoicePDF(invId){
   : { fillColor:[34,29,27], textColor:[255,255,255], fontStyle:'bold' };
   doc.autoTable({
       startY: Math.max(['Modern','Aster'].includes(tpl) ? y + 120 : y + 92, cy + 14),
-      head: [['Item / Service','Qty','Rate','Amount']],
+      head: [['Description','Qty','Unit price','Total']],
       body: rows,
       theme: (['Minimal','Modern','Editorial','Aster'].includes(tpl)) ? 'plain' : 'striped',
       styles:{ font:'helvetica', fontSize:10, cellPadding:8, textColor:[30,25,23] },
